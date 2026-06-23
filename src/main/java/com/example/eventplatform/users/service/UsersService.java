@@ -1,5 +1,6 @@
 package com.example.eventplatform.users.service;
 
+import com.example.eventplatform.database.RedisHandler;
 import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
 import com.example.eventplatform.security.JwtUtil;
@@ -10,6 +11,7 @@ import com.example.eventplatform.users.dto.ResponseUsers.ResponseSignUp;
 import com.example.eventplatform.users.entity.Users;
 import com.example.eventplatform.users.repository.UsersRepository;
 import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,7 @@ public class UsersService {
   private final UsersRepository usersRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtUtil jwtUtil;
+  private final RedisHandler redisHandler;
 
   @Transactional
   public ResponseSignUp signUp(RequestSignUp request) {
@@ -48,8 +51,13 @@ public class UsersService {
     if (!request.getPassword().matches(user.getPassword_hash())) {
       throw new GlobalCustomException(GlobalExceptions.AUTH_FAILED);
     }
-    // refresh token db 저장 부분 추가 필요
-    return new ResponseLogIn(jwtUtil.makeAccessToken(user.getUsername()), jwtUtil.expiresIn());
+    // refresh token redis 저장
+    String redisKey = user.getUsername() + ":refresh_token";
+    redisHandler.setStringWithTtl(redisKey, jwtUtil.makeRefreshToken(user.getUsername()),
+        jwtUtil.refreshTokenExpiresIn(), TimeUnit.SECONDS);
+
+    return new ResponseLogIn(jwtUtil.makeAccessToken(user.getUsername()),
+        jwtUtil.accessTokenExpiresIn());
 
 
   }

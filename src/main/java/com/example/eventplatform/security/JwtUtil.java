@@ -26,8 +26,12 @@ public class JwtUtil {
     this.TOKEN_SECRET = Keys.hmacShaKeyFor(secret.getBytes());
   }
 
-  public long expiresIn() {
+  public long accessTokenExpiresIn() {
     return this.EXP_ACCESS_TOKEN_VALIDITY_TIME / 1000; // 초 단위로 리턴
+  }
+
+  public long refreshTokenExpiresIn() {
+    return this.EXP_REFRESH_TOKEN_VALIDITY_TIME / 1000;
   }
 
   public String makeAccessToken(String username) {
@@ -51,8 +55,8 @@ public class JwtUtil {
     // token이 유효한지 확인
     // 유효하지 않다면 claim에서 추출하려고 할 때 throw 된다.
     try {
-      String nameFromAcessToken = extractNameFromToken(token);
-      return new UsernamePasswordAuthenticationToken(nameFromAcessToken, token);
+      String nameFromAccessToken = extractNameFromToken(token);
+      return new UsernamePasswordAuthenticationToken(nameFromAccessToken, token);
     } catch (Exception e) {
       // 만료 체크가 아닌 다른 에러는 발생하면 에러 처리
       throw new JwtException("Invalid JwtToken");
