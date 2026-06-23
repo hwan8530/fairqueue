@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: eventplatform
+
+jwt:
+  access_token:
+    valid_time: 60000 # 10분
+  refresh_token:
+    valid_time: 7200000 # 2시간
+  secret: thisismysecretforjwt.needtoover32bytesmaybe.butthissample
