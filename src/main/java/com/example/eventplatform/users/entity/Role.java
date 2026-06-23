@@ -1,12 +1,15 @@
 package com.example.eventplatform.users.entity;
 
+import lombok.Getter;
+
+@Getter
 public enum Role {
-    USER("USER"),
-    ADMIN("ADMIN");
+  USER("USER"),
+  ADMIN("ADMIN");
 
-    private String role;
+  private final String role;
 
-    Role(String role) {
-        this.role = role;
-    }
+  Role(String role) {
+    this.role = role;
+  }
 }
