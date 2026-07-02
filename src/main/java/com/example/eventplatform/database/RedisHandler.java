@@ -3,7 +3,9 @@ package com.example.eventplatform.database;
 import com.example.eventplatform.event.entity.QueueStruct;
 import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
+import com.example.eventplatform.security.JwtUtil;
 import java.time.Duration;
+import java.util.Date;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -22,7 +24,7 @@ import org.springframework.scheduling.annotation.Async;
 public class RedisHandler {
 
   private final RedisTemplate<String, Object> redisTemplate;
-  private static final String ENTRY_TOKEN_KEY = "entry_token:";
+  private final JwtUtil jwtUtil;
 
   /*
    * SET에 접근하여 연산 수행
@@ -67,20 +69,19 @@ public class RedisHandler {
             zValueOps.get(EventRedisKey.WAITING_IDENTIFY.generateKey(eventId, username)))
         .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
     return new QueueStruct(identifier,
-        zSetOps.rank(EventRedisKey.WAITING.generateKeyNoParam(eventId), username), null);
+        zSetOps.rank(EventRedisKey.WAITING.generateKeyNoParam(eventId), username), null, 0);
   }
 
   @Async("redisAsyncExecutor")
   public CompletableFuture<QueueStruct> queueStatus(long eventId, String username) {
     ZSetOperations<String, Object> zSetOps = redisTemplate.opsForZSet();
-    SetOperations<String, Object> setOps = redisTemplate.opsForSet();
     ValueOperations<String, Object> zValueOps = redisTemplate.opsForValue();
 
     Long rank = zSetOps.rank(EventRedisKey.WAITING.generateKeyNoParam(eventId), username);
     // 1. WAITING or ALLOWED 에 있는지 확인
     if (rank == null) {
       // ALLOWED 에서 확인
-      if (setOps.isMember(EventRedisKey.ALLOWED.generateKeyNoParam(eventId), username) == null) {
+      if (zSetOps.rank(EventRedisKey.ALLOWED.generateKeyNoParam(eventId), username) == null) {
         throw new GlobalCustomException(GlobalExceptions.QUEUE_ENTRY_NOT_FOUND);
       }
       rank = 0L;
@@ -89,14 +90,15 @@ public class RedisHandler {
     // 2. IDENTIFY get
     long identifier = (long) Optional.ofNullable(
             zValueOps.get(EventRedisKey.WAITING_IDENTIFY.generateKey(eventId, username)))
-        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
+        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.QUEUE_ENTRY_NOT_FOUND));
 
     // 3. ENTRY_TOKEN 확인
-    String entryToken = (String) Optional.ofNullable(
-        zValueOps.get(EventRedisKey.ENTRY_TOKEN.generateKey(eventId, username))).orElse(null);
-
+    String entryToken = (String) zValueOps.get(
+        EventRedisKey.ENTRY_TOKEN.generateKey(eventId, username));
+    Long remainingTime = redisTemplate.getExpire(
+        EventRedisKey.ENTRY_TOKEN.generateKey(eventId, username), TimeUnit.SECONDS);
     return CompletableFuture.completedFuture(
-        new QueueStruct(identifier, rank, entryToken));
+        new QueueStruct(identifier, rank, entryToken, remainingTime));
   }
 
   /*
@@ -104,20 +106,41 @@ public class RedisHandler {
    * @Params
    * - key : redis Key ex)waiting:{eventID}
    * - allowCount : 초당 허용 건수
+   * 부모 메소드에서 Async 어노테이션 선언
    */
-  @Async("redisAsyncExecutor")
-  public void popQueueAndGenerateEntryToken(long eventId, int allowCount) {
+  public void popQueueAndGenerateEntryToken(long eventId, int allowCount, long ttl) {
     ZSetOperations<String, Object> zSetOps = redisTemplate.opsForZSet();
-    SetOperations<String, Object> setOps = redisTemplate.opsForSet();
     ValueOperations<String, Object> zValueOps = redisTemplate.opsForValue();
     Set<ZSetOperations.TypedTuple<Object>> popedQueue = zSetOps.popMin(
         EventRedisKey.WAITING.generateKeyNoParam(eventId), allowCount);
     for (TypedTuple<?> o : popedQueue) {
       String username = Objects.requireNonNull(o.getValue()).toString();
-      setOps.add(EventRedisKey.ALLOWED.generateKeyNoParam(eventId), username);
+      zSetOps.add(EventRedisKey.ALLOWED.generateKeyNoParam(eventId), username,
+          System.currentTimeMillis() + ttl * 1000); // ttl 은 초단위니까 밀리초 단위로 맞춰주기 위한 연산
       zValueOps.set(EventRedisKey.ENTRY_TOKEN.generateKey(eventId, username),
-          System.currentTimeMillis(),
-          Duration.ofSeconds(30)); // entry_token:{eventId}:username TTL: 30seconds
+          jwtUtil.makeEntryToken(username, new Date(System.currentTimeMillis()), ttl),
+          Duration.ofSeconds(ttl)); // entry_token:{eventId}:username TTL: 30seconds
+      zValueOps.getAndExpire(EventRedisKey.WAITING_IDENTIFY.generateKey(eventId, username),
+          Duration.ofSeconds(ttl));
     }
+  }
+
+  /*
+  일정주기로 ALLOWED 삭제
+  WAITING_IDENTITY는 ALLOWED 에 넣을 때 TTL 설정하도록 했으니 여기선 ALLOWED만 삭제
+   */
+  public void removeAllowed(long eventId) {
+    ZSetOperations<String, Object> zSetOps = redisTemplate.opsForZSet();
+    zSetOps.removeRangeByScore(EventRedisKey.ALLOWED.generateKeyNoParam(eventId),
+        Double.NEGATIVE_INFINITY, System.currentTimeMillis());
+  }
+
+  public boolean entryKeyAvailable(long eventId, String username, String entryToken) {
+    ValueOperations<String, Object> valueOps = redisTemplate.opsForValue();
+    Object redisAction = valueOps.get(EventRedisKey.ENTRY_TOKEN.generateKey(eventId, username));
+    if (redisAction == null || !redisAction.toString().equals(entryToken)) {
+      return false;
+    }
+    return true;
   }
 }

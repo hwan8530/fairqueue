@@ -17,5 +17,4 @@ public class RequestEvent {
     private LocalDateTime openAt;
     private LocalDateTime closeAt;
   }
-
 }

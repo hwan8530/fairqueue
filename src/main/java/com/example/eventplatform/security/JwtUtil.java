@@ -17,13 +17,16 @@ public class JwtUtil {
   private final long EXP_ACCESS_TOKEN_VALIDITY_TIME;
   private final long EXP_REFRESH_TOKEN_VALIDITY_TIME;
   private final Key TOKEN_SECRET;
+  private final Key ENTRY_TOKEN_SECRET;
 
   public JwtUtil(@Value("{$jwt.access_token.valid_time") long acessTokenTime,
       @Value("{$.jwt.refresh_token.valid_time") long refreshTokenTime,
-      @Value("{$.jwt.secret}") String secret) {
+      @Value("{$.jwt.secret}") String secret,
+      @Value("{$.jwt.entry_token_secret}") String entryTokenSecret) {
     this.EXP_ACCESS_TOKEN_VALIDITY_TIME = acessTokenTime;
     this.EXP_REFRESH_TOKEN_VALIDITY_TIME = refreshTokenTime;
     this.TOKEN_SECRET = Keys.hmacShaKeyFor(secret.getBytes());
+    this.ENTRY_TOKEN_SECRET = Keys.hmacShaKeyFor(entryTokenSecret.getBytes());
   }
 
   public long accessTokenExpiresIn() {
@@ -44,6 +47,12 @@ public class JwtUtil {
     return Jwts.builder().subject("Refresh Token").issuedAt(new Date(System.currentTimeMillis()))
         .expiration(new Date(System.currentTimeMillis() + EXP_REFRESH_TOKEN_VALIDITY_TIME))
         .claim("username", username).signWith(TOKEN_SECRET).compact();
+  }
+
+  public String makeEntryToken(String username, Date now, long ttl) {
+    return Jwts.builder().subject("Entry Token").issuedAt(now)
+        .expiration(new Date(now.getTime() + ttl)).claim("username", username)
+        .claim("ttl", ttl).signWith(ENTRY_TOKEN_SECRET).compact();
   }
 
   public String extractNameFromToken(String token) {

@@ -4,7 +4,10 @@ import java.time.LocalDateTime;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-public class ResponseEvent {
+public class ResponseEvent<T> {
+
+  int status;
+  T data;
 
   @Setter
   @NoArgsConstructor
@@ -35,5 +38,15 @@ public class ResponseEvent {
     private long eventId;
     private long remainingStock;
     private boolean soldOut;
+  }
+
+  @Setter
+  @NoArgsConstructor
+  public static class ResponseReservation {
+
+    private long reservationId;
+    private String status;
+    private String issuedCode;
+    private LocalDateTime expiresAt;
   }
 }

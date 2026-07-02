@@ -3,9 +3,11 @@ package com.example.eventplatform.event.service;
 import com.example.eventplatform.database.EventRedisKey;
 import com.example.eventplatform.database.RedisHandler;
 import com.example.eventplatform.event.dto.RequestEvent.RequestCreateEvent;
+import com.example.eventplatform.event.dto.ResponseEvent;
 import com.example.eventplatform.event.dto.ResponseEvent.ResponseCreateEvent;
 import com.example.eventplatform.event.dto.ResponseEvent.ResponseEventDetail;
 import com.example.eventplatform.event.dto.ResponseEvent.ResponseEventStock;
+import com.example.eventplatform.event.dto.ResponseEvent.ResponseReservation;
 import com.example.eventplatform.event.dto.ResponseQueue.ResponseQueueStatus;
 import com.example.eventplatform.event.entity.Event;
 import com.example.eventplatform.event.entity.EventStatus;
@@ -14,11 +16,17 @@ import com.example.eventplatform.event.mapper.EventMapper;
 import com.example.eventplatform.event.repository.EventRepository;
 import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
+import com.example.eventplatform.reservation.entity.Reservation;
+import com.example.eventplatform.reservation.repository.ReservationRepository;
+import com.example.eventplatform.security.JwtUtil;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -34,6 +42,8 @@ public class EventService {
   private final EventRepository eventRepository;
   private final EventMapper eventMapper;
   private final RedisHandler redisHandler;
+  private final JwtUtil jwtUtil;
+  private final ReservationRepository reservationRepository;
 
   @Transactional
   public ResponseCreateEvent createEvent(RequestCreateEvent request) {
@@ -61,14 +71,19 @@ public class EventService {
   }
 
   @Transactional
-  public ResponseQueueStatus enQueueWaiting(long eventId)
-      throws ExecutionException, InterruptedException {
+  public ResponseQueueStatus enQueueWaiting(long eventId) {
     Authentication authentication = extractAuthentication();
-    findEvent(eventId); // event 존재 여부만 확인
+    Event event = findEvent(eventId); // event 존재 여부 확인
+    String eventStatus = event.getStatus().getStatus();
+    if (!eventStatus.equals(EventStatus.SCHEDULED.getStatus())
+        || !eventStatus.equals(EventStatus.OPEN.getStatus())) {
+      throw new GlobalCustomException(GlobalExceptions.EVENT_NOT_OPEN);
+    }
+
     QueueStruct queueStruct = redisHandler.enQueueWaiting(eventId,
         (String) authentication.getPrincipal());
     return new ResponseQueueStatus(eventId, queueStruct.getIdentifier(), queueStruct.getRank(),
-        queueStruct.getRank() == 0, queueStruct.getEntryToken());
+        queueStruct.getRank() == 0, queueStruct.getEntryToken(), queueStruct.getEntryTokenTtlSec());
   }
 
   /*
@@ -83,16 +98,38 @@ public class EventService {
             (String) authentication.getPrincipal())
         .get();
     return new ResponseQueueStatus(eventId, queueStruct.getIdentifier(), queueStruct.getRank(),
-        queueStruct.getRank() == 0, queueStruct.getEntryToken());
+        queueStruct.getRank() == 0, queueStruct.getEntryToken(), queueStruct.getEntryTokenTtlSec());
+  }
+
+  public CompletableFuture<ResponseEvent<ResponseReservation>> makeReservation(long eventId,
+      String entryToken,
+      String idempotencyKey) {
+    Authentication authentication = extractAuthentication();
+    String username = (String) authentication.getPrincipal();
+
+    if (!redisHandler.entryKeyAvailable(eventId, username, entryToken)) {
+      throw new GlobalCustomException(GlobalExceptions.INVALID_ENTRY_TOKEN);
+    }
+
+    Optional<Reservation> optional = reservationRepository.findByIdempotencyKey(idempotencyKey);
+    if (optional.isPresent()) { // idempotencyKey 중복
+      // 사용자 체크 후 같으면 내부 값 채워서 리턴
+
+      // 아닌경우 에러 리턴
+
+    }
+
+    return new CompletableFuture<>();
   }
 
   /*
   1초마다 SCHEDULED 상태의 이벤트들을 확인하면서 상태를 변경할지 확인
    */
+  @Async("redisAsyncExecutor")
   @Scheduled(fixedDelay = 1000)
   @Transactional
   public void activateEvent() {
-    List<Event> eventList = eventRepository.findByStatus(EventStatus.SCHEDULED.name());
+    List<Event> eventList = eventRepository.findByStatus(EventStatus.SCHEDULED.getStatus());
     for (Event event : eventList) {
       if (event.getOpen_at().isBefore(LocalDateTime.now()) || event.getOpen_at()
           .isEqual(LocalDateTime.now())) {
@@ -103,18 +140,22 @@ public class EventService {
   }
 
   /*
-  1초마다 OPEN 상태의 이벤트들을 확인하고 이벤트별 entry token을 만드는 메소드
-  초당 허용 건수만큼 waiting:{evendId} ZSET에서 삭제하고 allowed:{eventId} SET에 username을 member로 추가
+  1초마다 OPEN 상태의 이벤트들을 확인하고 이벤트별 entry token 생성(TTL 30s) 및 ALLOWED, IDENTICAL 관리
+  1. 초당 허용 건수만큼 waiting:{evendId} ZSET에서 삭제하고 allowed:{eventId} SET에 username을 member로 추가
+  2. ALLOWED를 확인하고 score가 현재 시간보다 적다면 삭제
+  3. 삭제하는 ALLOWED의 username으로 IDENTICAL에서 삭제
   entry_token:{eventId}:username 을 TTL 30초로 생성
    */
+  @Async("redisAsyncExecutor")
   @Scheduled(fixedDelay = 1000)
   @Transactional
   public void moveQueueToAllow() {
     List<Event> eventList = eventRepository.findByStatus(EventStatus.OPEN.name());
-    String redisKey = "allow:";
     int maxAllowedCount = 5; // 초당 5명 허용
+    long ttl = 30; // TTL 30초
     for (Event event : eventList) {
-      redisHandler.popQueueAndGenerateEntryToken(event.getId(), maxAllowedCount);
+      redisHandler.popQueueAndGenerateEntryToken(event.getId(), maxAllowedCount, ttl);
+      redisHandler.removeAllowed(event.getId());
     }
   }
 

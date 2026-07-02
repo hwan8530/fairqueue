@@ -4,12 +4,14 @@ import com.example.eventplatform.event.dto.ResponseEvent.ResponseEventDetail;
 import com.example.eventplatform.event.dto.ResponseEvent.ResponseEventStock;
 import com.example.eventplatform.event.dto.ResponseQueue.ResponseQueueStatus;
 import com.example.eventplatform.event.service.EventService;
+import java.util.concurrent.ExecutionException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,5 +37,16 @@ public class EventController {
     return ResponseEntity.status(HttpStatus.OK).body(eventService.enQueueWaiting(eventId));
   }
 
+  @GetMapping("/{eventId}/queue/status")
+  public ResponseEntity<ResponseQueueStatus> getEventStatus(@PathVariable long eventId)
+      throws ExecutionException, InterruptedException {
+    return ResponseEntity.status(HttpStatus.OK).body(eventService.queueStatus(eventId));
+  }
 
+  @PostMapping("/{eventId}/reservations")
+  public ResponseEntity<?> postReservation(@PathVariable long eventId,
+      @RequestHeader("X-Entry-Token") String entryToken,
+      @RequestHeader("Idempotency-Key") String idempotencyKey) {
+    return null;
+  }
 }

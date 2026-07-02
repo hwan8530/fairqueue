@@ -16,6 +16,7 @@ public class ResponseQueue {
     private long ahead; // redis.rank 값
     private boolean admitted;
     private String entryToken;
+    private long entryTokenTtlSec;
   }
 
 }

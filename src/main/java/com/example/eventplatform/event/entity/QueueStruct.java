@@ -12,4 +12,5 @@ public class QueueStruct {
   private long identifier;
   private long rank;
   private String entryToken;
+  private long entryTokenTtlSec;
 }
