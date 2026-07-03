@@ -1,13 +1,16 @@
 package com.example.eventplatform.event.dto;
 
 import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-public class ResponseEvent<T> {
-
-  int status;
-  T data;
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class ResponseEvent {
 
   @Setter
   @NoArgsConstructor
@@ -38,15 +41,5 @@ public class ResponseEvent<T> {
     private long eventId;
     private long remainingStock;
     private boolean soldOut;
-  }
-
-  @Setter
-  @NoArgsConstructor
-  public static class ResponseReservation {
-
-    private long reservationId;
-    private String status;
-    private String issuedCode;
-    private LocalDateTime expiresAt;
   }
 }

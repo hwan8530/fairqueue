@@ -11,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,12 +40,5 @@ public class EventController {
   public ResponseEntity<ResponseQueueStatus> getEventStatus(@PathVariable long eventId)
       throws ExecutionException, InterruptedException {
     return ResponseEntity.status(HttpStatus.OK).body(eventService.queueStatus(eventId));
-  }
-
-  @PostMapping("/{eventId}/reservations")
-  public ResponseEntity<?> postReservation(@PathVariable long eventId,
-      @RequestHeader("X-Entry-Token") String entryToken,
-      @RequestHeader("Idempotency-Key") String idempotencyKey) {
-    return null;
   }
 }
