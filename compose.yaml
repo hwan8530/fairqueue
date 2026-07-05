@@ -11,3 +11,7 @@ services:
     image: 'redis:latest'
     ports:
       - '6379'
+  kafka:
+    image: 'apache/kafka:latest'
+    ports:
+      - '9092'

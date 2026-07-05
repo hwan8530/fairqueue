@@ -19,8 +19,8 @@ public class JwtUtil {
   private final Key TOKEN_SECRET;
   private final Key ENTRY_TOKEN_SECRET;
 
-  public JwtUtil(@Value("{$jwt.access_token.valid_time") long acessTokenTime,
-      @Value("{$.jwt.refresh_token.valid_time") long refreshTokenTime,
+  public JwtUtil(@Value("{$jwt.access_token.valid_time}") long acessTokenTime,
+      @Value("{$.jwt.refresh_token.valid_time}") long refreshTokenTime,
       @Value("{$.jwt.secret}") String secret,
       @Value("{$.jwt.entry_token_secret}") String entryTokenSecret) {
     this.EXP_ACCESS_TOKEN_VALIDITY_TIME = acessTokenTime;

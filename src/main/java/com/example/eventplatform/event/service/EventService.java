@@ -4,6 +4,7 @@ import static com.example.eventplatform.common.CommonFunction.extractAuthenticat
 
 import com.example.eventplatform.database.EventRedisKey;
 import com.example.eventplatform.database.RedisHandler;
+import com.example.eventplatform.event.dto.QueueStruct;
 import com.example.eventplatform.event.dto.RequestEvent.RequestCreateEvent;
 import com.example.eventplatform.event.dto.ResponseEvent.ResponseCreateEvent;
 import com.example.eventplatform.event.dto.ResponseEvent.ResponseEventDetail;
@@ -11,7 +12,6 @@ import com.example.eventplatform.event.dto.ResponseEvent.ResponseEventStock;
 import com.example.eventplatform.event.dto.ResponseQueue.ResponseQueueStatus;
 import com.example.eventplatform.event.entity.Event;
 import com.example.eventplatform.event.entity.EventStatus;
-import com.example.eventplatform.event.entity.QueueStruct;
 import com.example.eventplatform.event.mapper.EventMapper;
 import com.example.eventplatform.event.repository.EventRepository;
 import com.example.eventplatform.exception.GlobalCustomException;

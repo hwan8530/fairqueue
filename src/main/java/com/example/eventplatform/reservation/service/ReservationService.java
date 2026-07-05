@@ -115,7 +115,7 @@ public class ReservationService {
   동시성 문제 해결 방안 3가지 모두 구현해야함
   1. DB 비관적 락 (SELECT FOR UPDATE)
   2. DB 낙관적 락 (version column 사용해서 객체 내의 값을 변경 시킬 때 명시적으로 변경했다고 기록)
-  3. REDIS 원자 연산 (DECR/Lua 스크립트로 재고 차감 후 DB 반영)
+  3. REDIS 원자 연산 (DECR/Lua 스크립트로 재고 증감 후 DB 반영)
    */
   @Transactional
   public deleteReservationDTO deleteReservation(long reservationId) {

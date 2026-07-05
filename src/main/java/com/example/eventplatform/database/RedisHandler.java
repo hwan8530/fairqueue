@@ -1,6 +1,6 @@
 package com.example.eventplatform.database;
 
-import com.example.eventplatform.event.entity.QueueStruct;
+import com.example.eventplatform.event.dto.QueueStruct;
 import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
 import com.example.eventplatform.security.JwtUtil;
@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.ValueOperations;
@@ -19,11 +20,14 @@ import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 import org.springframework.data.redis.core.types.Expiration;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
 
 @RequiredArgsConstructor
+@Component
 public class RedisHandler {
 
   private final RedisTemplate<String, Object> redisTemplate;
+  private final ReactiveRedisTemplate<String, String> reactiveRedisTemplate;
   private final JwtUtil jwtUtil;
 
   /*
