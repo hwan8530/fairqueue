@@ -12,12 +12,14 @@ import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 import java.util.Map;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @NoArgsConstructor
+@Getter
 public class Job {
 
   @Id
@@ -70,5 +72,50 @@ public class Job {
     LocalDateTime now = LocalDateTime.now();
     this.created_at = now;
     this.updated_at = now;
+    this.next_run_at = now.plusMinutes(3);
   }
+
+  public LocalDateTime enQueueJob() {
+    this.status = JobStatus.QUEUED;
+    this.updated_at = LocalDateTime.now();
+    this.next_run_at = LocalDateTime.now().plusMinutes(2);
+    return next_run_at;
+  }
+
+  public int remainingAttempts() {
+    return max_attempts - (attempts + 1);
+  }
+
+  public void start() {
+    this.attempts = this.attempts + 1;
+    if (this.attempts > max_attempts) {
+      this.status = JobStatus.FAILED;
+      this.last_error = "Exceed max attempts";
+    } else {
+      this.status = JobStatus.RUNNING;
+    }
+    this.updated_at = LocalDateTime.now();
+  }
+
+  public void fail(String error) {
+    this.status = JobStatus.FAILED;
+    this.last_error = error;
+    this.updated_at = LocalDateTime.now();
+  }
+
+  public void succeed() {
+    this.status = JobStatus.SUCCEEDED;
+    this.updated_at = LocalDateTime.now();
+    this.next_run_at = null;
+  }
+
+  public LocalDateTime retry() {
+    // delay = min ( base * 2^(attempt-1), cap ) + jitter
+    long delay = (long) (Math.min(2 * Math.pow(2, attempts - 1), 60) + (int) (Math.random() * 2));
+    this.status = JobStatus.QUEUED;
+    this.updated_at = LocalDateTime.now();
+    this.next_run_at = LocalDateTime.now().plusSeconds(delay);
+    return next_run_at;
+  }
+
 }

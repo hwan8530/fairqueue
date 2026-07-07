@@ -5,6 +5,7 @@ import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
 import com.example.eventplatform.security.JwtUtil;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Objects;
@@ -169,5 +170,10 @@ public class RedisHandler {
       throw new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR);
     }
     return result;
+  }
+
+  public void makeJobWithTtl(String key, LocalDateTime next_run_at) {
+    ValueOperations<String, Object> valueOps = redisTemplate.opsForValue();
+    valueOps.set(key, "", Duration.between(LocalDateTime.now(), next_run_at));
   }
 }

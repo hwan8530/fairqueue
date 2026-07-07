@@ -71,4 +71,13 @@ public class Event {
       this.status = EventStatus.CLOSED;
     }
   }
+
+  public long decreaseRemainingStock() {
+    if (this.remaining_stock >= 1) {
+      this.remaining_stock--;
+      return 1;
+    } else {
+      return 0;
+    }
+  }
 }

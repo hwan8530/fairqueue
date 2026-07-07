@@ -135,4 +135,11 @@ public class EventService {
     return eventRepository.findById(eventId)
         .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
   }
+
+  @Transactional
+  public long decreaseRemainingStock(long eventId) {
+    Event event = eventRepository.findByIdWithLock(eventId)
+        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
+    return event.decreaseRemainingStock();
+  }
 }
