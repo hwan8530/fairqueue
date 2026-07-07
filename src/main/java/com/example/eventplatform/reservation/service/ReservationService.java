@@ -8,6 +8,7 @@ import com.example.eventplatform.event.entity.EventStatus;
 import com.example.eventplatform.event.repository.EventRepository;
 import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
+import com.example.eventplatform.messagebroker.KafkaProducer;
 import com.example.eventplatform.reservation.dto.ResponseReservation;
 import com.example.eventplatform.reservation.dto.ResponseReservation.deleteReservationDTO;
 import com.example.eventplatform.reservation.dto.ResponseReservation.reservationDTO;
@@ -37,10 +38,11 @@ public class ReservationService {
   private final EventRepository eventRepository;
   private final UsersRepository usersRepository;
   private final ReservationMapper reservationMapper;
+  private final KafkaProducer kafkaProducer;
 
   @Transactional
   @Async
-  public CompletableFuture<com.example.eventplatform.reservation.dto.ResponseReservation<reservationDTO>> makeReservation(
+  public CompletableFuture<ResponseReservation<reservationDTO>> makeReservation(
       long eventId,
       String entryToken,
       String idempotencyKey) {
@@ -59,38 +61,45 @@ public class ReservationService {
       responseReservation.setStatus(200);
       responseReservation.setData(dto);
       return CompletableFuture.completedFuture(responseReservation);
-    } else {
-      // 같은 사용자의 다른 예약이 있는지 확인
-      List<Reservation> reservationList = reservationRepository.findByUsername(username);
-      if (!reservationList.isEmpty() && reservationList.size() >= reservationList.getFirst()
-          .getEvent().getPer_user_limit()) {
-        throw new GlobalCustomException(GlobalExceptions.DUPLICATE_USER);
-      }
+    } else { // 신규 생성
+      Event event = eventRepository.findByIdWithLock(eventId)
+          .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
 
-      Optional<Event> eventOptional = eventRepository.findById(eventId);
-      Optional<Users> usersOptional = usersRepository.findByUsername(username);
-      if (eventOptional.isEmpty() || usersOptional.isEmpty()) {
-        throw new GlobalCustomException(
-            GlobalExceptions.INTERNAL_ERROR); // 명시된 에러가 없어서 Internal error
-      }
-
-      Event event = eventOptional.get();
-      if (event.getRemaining_stock() == 0) {
-        throw new GlobalCustomException(GlobalExceptions.SOLD_OUT);
-      }
-
+      // event open 확인
       if (!event.getStatus().getStatus().equals(EventStatus.OPEN.getStatus())) {
         throw new GlobalCustomException(GlobalExceptions.EVENT_NOT_OPEN);
       }
 
-      Reservation reservation = Reservation.builder().event(eventOptional.get())
-          .user(usersOptional.get()).idempotency_key(idempotencyKey).build();
-      reservationRepository.save(reservation);
-      reservationDTO dto = reservationMapper.toResponse(reservation);
-      ResponseReservation<reservationDTO> responseReservation = new ResponseReservation<>();
-      responseReservation.setStatus(202);
-      responseReservation.setData(dto);
-      return CompletableFuture.completedFuture(responseReservation);
+      // 재고 원자 차감 (성공 시에만 진행)
+      long result = redisHandler.decrementEventStock(eventId, event.getPer_user_limit());
+      if (result == 1) {
+        event.setRemaining_stock(event.getRemaining_stock() - event.getPer_user_limit());
+        // 같은 사용자의 다른 예약이 있는지 확인
+        List<Reservation> reservationList = reservationRepository.findByUsername(username);
+        if (!reservationList.isEmpty() && reservationList.size() >= reservationList.getFirst()
+            .getEvent().getPer_user_limit()) {
+          throw new GlobalCustomException(GlobalExceptions.DUPLICATE_USER);
+        }
+
+        Optional<Event> eventOptional = eventRepository.findById(eventId);
+        Optional<Users> usersOptional = usersRepository.findByUsername(username);
+        if (eventOptional.isEmpty() || usersOptional.isEmpty()) {
+          throw new GlobalCustomException(
+              GlobalExceptions.INTERNAL_ERROR); // 명시된 에러가 없어서 Internal error
+        }
+        Reservation reservation = Reservation.builder().event(eventOptional.get())
+            .user(usersOptional.get()).idempotency_key(idempotencyKey).build();
+        reservationRepository.save(reservation);
+        kafkaProducer.sendMessage("confirm_reservation", reservation); // kafka를 통한 메세지 발행
+        reservationDTO dto = reservationMapper.toResponse(reservation);
+        ResponseReservation<reservationDTO> responseReservation = new ResponseReservation<>();
+        responseReservation.setStatus(202);
+        responseReservation.setData(dto);
+        return CompletableFuture.completedFuture(responseReservation);
+      } else { // SOLD_OUT
+        event.setRemaining_stock(0);
+        throw new GlobalCustomException(GlobalExceptions.SOLD_OUT);
+      }
     }
   }
 
@@ -137,7 +146,8 @@ public class ReservationService {
     }
 
     deleteReservationDTO dto = reservationMapper.toDeleteResponse(reservation);
-    Event event = eventRepository.findByIdWithLock(reservation.getEvent().getId()); // 비관적 락 획득
+    Event event = eventRepository.findByIdWithLock(reservation.getEvent().getId())
+        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR)); // 비관적 락 획득
     if (event.getRemaining_stock() + 1 > event.getTotal_stock()) {
       event.setRemaining_stock(event.getRemaining_stock());
     } else {

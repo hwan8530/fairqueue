@@ -60,5 +60,6 @@ public class Reservation {
     this.user = user;
     this.idempotency_key = idempotency_key;
     this.created_at = LocalDateTime.now();
+    this.expires_at = this.created_at.plusMinutes(5);
   }
 }

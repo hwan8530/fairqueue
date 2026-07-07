@@ -5,6 +5,7 @@ import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
 import com.example.eventplatform.security.JwtUtil;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Optional;
@@ -12,23 +13,27 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.core.types.Expiration;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 @RequiredArgsConstructor
 @Component
+@Slf4j
 public class RedisHandler {
 
   private final RedisTemplate<String, Object> redisTemplate;
   private final ReactiveRedisTemplate<String, String> reactiveRedisTemplate;
   private final JwtUtil jwtUtil;
+  private final RedisScript<Long> decrementRedisScript;
 
   /*
    * SET에 접근하여 연산 수행
@@ -142,9 +147,27 @@ public class RedisHandler {
   public boolean entryKeyAvailable(long eventId, String username, String entryToken) {
     ValueOperations<String, Object> valueOps = redisTemplate.opsForValue();
     Object redisAction = valueOps.get(EventRedisKey.ENTRY_TOKEN.generateKey(eventId, username));
-    if (redisAction == null || !redisAction.toString().equals(entryToken)) {
-      return false;
+    return redisAction != null && redisAction.toString().equals(entryToken);
+  }
+
+  public void createEventStock(long eventId, long stock) {
+    redisTemplate.opsForValue()
+        .set(EventRedisKey.REMAINING_STOCK.generateKeyNoParam(eventId), stock);
+  }
+
+  /*
+  return : 0 - SOLD_OUT
+           1 - Success
+   */
+  public Long decrementEventStock(long eventId, long stock) {
+    String key = EventRedisKey.REMAINING_STOCK.generateKeyNoParam(eventId);
+    Long result = redisTemplate.execute(decrementRedisScript, Collections.singletonList(key),
+        String.valueOf(stock));
+
+    if (result == null || result == -1) {
+      log.debug("Event remaining is null. eventId:{}", eventId);
+      throw new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR);
     }
-    return true;
+    return result;
   }
 }

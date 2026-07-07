@@ -1,4 +1,4 @@
-package com.example.eventplatform.jobs.entity;
+package com.example.eventplatform.job.entity;
 
 public enum JobStatus {
   SCHEDULED("SCHEDULED"),

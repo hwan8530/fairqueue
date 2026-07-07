@@ -8,6 +8,7 @@ public enum EventRedisKey {
   ENTRY_TOKEN("entry_token:"), // 각 EVENT 별 ENTRY_TOKEN 인원 - VALUE / TTL : 30s
   ACTIVE_EVENTS("active:events"), // 현재 OPEN 상태인 EVENT - SET
   WAITING_IDENTIFY("waiting:identify:"),
+  REMAINING_STOCK("remaining_stock:"),
   ALLOWED("allowed:");
 
   private String prefix;

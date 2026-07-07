@@ -1,4 +1,4 @@
-package com.example.eventplatform.jobs.entity;
+package com.example.eventplatform.job.entity;
 
 import jakarta.annotation.Nullable;
 import jakarta.persistence.Column;
@@ -11,10 +11,13 @@ import jakarta.persistence.Id;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 import java.util.Map;
+import lombok.Builder;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
+@NoArgsConstructor
 public class Job {
 
   @Id
@@ -54,4 +57,18 @@ public class Job {
   private LocalDateTime created_at;
   @NotNull
   private LocalDateTime updated_at;
+
+  // CONFIRM_RESERVATION
+  @Builder
+  public Job(JobType type, Map<String, Object> payload, String idempotency_key) {
+    this.type = type;
+    this.payload = payload;
+    this.status = JobStatus.SCHEDULED;
+    this.idempotency_key = idempotency_key;
+    this.attempts = 0;
+    this.max_attempts = 5;
+    LocalDateTime now = LocalDateTime.now();
+    this.created_at = now;
+    this.updated_at = now;
+  }
 }

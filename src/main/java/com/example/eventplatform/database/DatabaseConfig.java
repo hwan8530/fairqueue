@@ -3,10 +3,12 @@ package com.example.eventplatform.database;
 import java.util.concurrent.Executor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -63,5 +65,12 @@ public class DatabaseConfig {
     executor.setThreadNamePrefix("RedisAsyncExecutor-"); // 스레드 이름 접두사 (로그 확인용)
     executor.initialize();
     return executor;
+  }
+
+  @Bean
+  public RedisScript<Long> decrementRedisScript() {
+    ClassPathResource resource = new ClassPathResource("scripts/decrementEventStock.lua");
+    // 루아 스크립트의 반환 타입(Long)을 지정하여 빈으로 등록
+    return RedisScript.of(resource, Long.class);
   }
 }

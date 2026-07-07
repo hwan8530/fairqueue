@@ -1,4 +1,6 @@
-package com.example.eventplatform.jobs.entity;
+package com.example.eventplatform.job.entity;
+
+import java.util.Arrays;
 
 public enum JobType {
   CONFIRMED_RESERVATION("CONFIRMED_RESERVATION"),
@@ -12,5 +14,10 @@ public enum JobType {
 
   public String getDetail() {
     return detail;
+  }
+
+  public static JobType fromStringtoJobType(String type) {
+    return Arrays.stream(JobType.values()).filter(jobType -> jobType.getDetail().equals(type))
+        .findFirst().orElse(null);
   }
 }
