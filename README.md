@@ -30,7 +30,7 @@ FairQueue는 한정된 수량의 쿠폰/티켓을 짧은 시간에 폭주하는 
 Redis는 빠른 카운팅과 예약(임시 토큰), 만료 이벤트 감지(notify-keyspace-events)를 담당하며, Kafka는 안정적인 메시지 전달과 소비자 확장성을
 제공합니다. 발급 확정은 PostgreSQL 트랜잭션과 고유 제약(UNIQUE)을 통해 중복을 방지합니다.
 
-## 정합성 보장 전략 (권장)
+## 정합성 보장 전략
 
 - Redis에서 재고 감소는 Lua 스크립트로 atomic 수행
 - Redis 감소 성공 시에만 Kafka에 메시지 발행
@@ -46,9 +46,9 @@ Redis는 빠른 카운팅과 예약(임시 토큰), 만료 이벤트 감지(noti
 - Redis notify-keyspace-events 설정 확인
 - 데이터 백업 및 retention 정책(Changelog/Events 로그 포함)
 
-## 설치 및 실행 (예시)
+## 설치 및 실행
 
-### 포함된 파일 요약
+### 파일별 설명
 
 - Dockerfile
     - Gradle builder multi-stage: Gradle wrapper(gradlew)로 build (`./gradlew bootJar -x test`) 후 경량
