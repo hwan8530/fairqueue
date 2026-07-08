@@ -2,6 +2,8 @@ package com.example.eventplatform.users.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -10,7 +12,6 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Getter
@@ -31,9 +32,9 @@ public class Users {
   @Column(columnDefinition = "VARCHAR(255)")
   private String password_hash;
   @NotNull
+  @Enumerated(EnumType.STRING)
   @Column(columnDefinition = "VARCHAR(20)")
-  @ColumnDefault("'USER'")
-  private Role role;
+  private Role role = Role.USER;
   @NotNull
   private LocalDateTime create_at;
 }

@@ -1,34 +1,55 @@
 spring:
   application:
     name: eventplatform
-  redis:
-    host: localhost
-    port: 6379
-  # DB
+
+  # DB (PostgreSQL) 설정
   datasource:
-    driver-class-name: org.postgreSql.Driver
-    url: jdbc:postgresql://localhost:5432/mydatabase
-    platform: postgres
-    username: myuser
-    password: secret
+    driver-class-name: org.postgresql.Driver # 대소문자 오타 교정
+    # Podman 컴포즈와 로컬 호환을 위해 환경 변수 처리 (기본 DB명 mydatabase -> eventdb로 컴포즈와 일치 권장)
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/eventdb}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:secret}
+
   jpa:
-    hibernate: update
+    hibernate:
+      ddl-auto: update # 경로 정확하게 수정
     show-sql: true
     properties:
       hibernate:
         format_sql: true
         highlight_sql: true
-  kafka:
-    host: localhost
-    port: 9092
+        default_schema: public
 
+  # Redis (대기열 및 키 만료 이벤트) 설정
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost} # Podman 컴포즈 환경 대응
+      port: 6379
+
+  # Kafka (비동기 Job 워커 큐) 설정
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092} # 공식 표준 구조로 변경
+    consumer:
+      group-id: event-worker-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false # 수동 오프셋 커밋을 위해 false 설정
+    listener:
+      ack-mode: manual_immediate # 워커에서 ack.acknowledge() 쓰기 위해 필수 설정
+
+  docker:
+    compose:
+      enabled: false
+
+# JWT 설정 (작성하신 값 유지)
 jwt:
   access_token:
-    valid_time: 60000 # 10분
+    valid_time: 600000 # 10분
   refresh_token:
     valid_time: 7200000 # 2시간
   secret: thisismysecretforjwt.needtoover32bytesmaybe.butthissample
+  entry_token_secret: thisisentry_token_secretforjwt.needtoover32bytes.butthisisample
 
 logging:
   level:
     root: info
+    org.hibernate.SQL: debug # SQL 로그를 더 명확히 보기 위한 팁

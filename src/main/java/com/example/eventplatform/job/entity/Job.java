@@ -38,11 +38,9 @@ public class Job {
   @Enumerated(EnumType.STRING)
   private JobStatus status;
   @NotNull
-  @Column(columnDefinition = "DEFAULT 0")
-  private int attempts;
+  private int attempts = 0;
   @NotNull
-  @Column(columnDefinition = "DEFAULT 5")
-  private int max_attempts;
+  private int max_attempts = 5;
   @Nullable
   private LocalDateTime next_run_at;
   @NotNull

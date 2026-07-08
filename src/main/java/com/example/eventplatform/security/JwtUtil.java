@@ -19,12 +19,12 @@ public class JwtUtil {
   private final Key TOKEN_SECRET;
   private final Key ENTRY_TOKEN_SECRET;
 
-  public JwtUtil(@Value("{$jwt.access_token.valid_time}") long acessTokenTime,
-      @Value("{$.jwt.refresh_token.valid_time}") long refreshTokenTime,
-      @Value("{$.jwt.secret}") String secret,
-      @Value("{$.jwt.entry_token_secret}") String entryTokenSecret) {
-    this.EXP_ACCESS_TOKEN_VALIDITY_TIME = acessTokenTime;
-    this.EXP_REFRESH_TOKEN_VALIDITY_TIME = refreshTokenTime;
+  public JwtUtil(@Value("${jwt.access_token.valid_time}") String accessTokenTime,
+      @Value("${jwt.refresh_token.valid_time}") String refreshTokenTime,
+      @Value("${jwt.secret}") String secret,
+      @Value("${jwt.entry_token_secret}") String entryTokenSecret) {
+    this.EXP_ACCESS_TOKEN_VALIDITY_TIME = Long.parseLong(accessTokenTime);
+    this.EXP_REFRESH_TOKEN_VALIDITY_TIME = Long.parseLong(refreshTokenTime);
     this.TOKEN_SECRET = Keys.hmacShaKeyFor(secret.getBytes());
     this.ENTRY_TOKEN_SECRET = Keys.hmacShaKeyFor(entryTokenSecret.getBytes());
   }

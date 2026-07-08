@@ -1,17 +1,99 @@
+version: '3.8'
+
 services:
-  postgres:
-    image: 'postgres:latest'
+  # 1. Spring Boot 애플리케이션 서비스
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: event-app:latest
+    container_name: event-app
+    ports:
+      - "8080:8080"
     environment:
-      - 'POSTGRES_DB=mydatabase'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/eventdb
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=secret
+      - SPRING_DATA_REDIS_HOST=redis-cache
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka-broker:9092
+    depends_on:
+      postgres-db:
+        condition: service_healthy # DB가 완전히 켜진 후 스프링을 띄움
+      redis-cache:
+        condition: service_started
+      kafka-broker:
+        condition: service_started
+    networks:
+      - event-network
+
+  # 2. PostgreSQL 데이터베이스
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: postgres-db
     ports:
-      - '5432'
-  redis:
-    image: 'redis:latest'
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=eventdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck: # DB 가 가동되었는지 체크하는 로직
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - event-network
+
+  # 3. Redis (대기열 및 재고 관리)
+  redis-cache:
+    image: redis:7-alpine
+    container_name: redis-cache
     ports:
-      - '6379'
-  kafka:
-    image: 'apache/kafka:latest'
+      - "6379:6379"
+    # FR-E6 대안으로 이야기한 만료 이벤트를 위해 notify-keyspace-events 설정을 켜서 실행
+    command: redis-server --notify-keyspace-events Ex
+    volumes:
+      - redis_data:/data
+    networks:
+      - event-network
+
+  # 4. Kafka 브로커 (Zookeeper가 없는 최신 KRaft 모드)
+  kafka-broker:
+    image: apache/kafka:latest
+    container_name: kafka-broker
     ports:
-      - '9092'
+      - "29092:29092"
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      # 1. 리스너 문 열기
+      - KAFKA_LISTENERS=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      # 2. 반환할 광고 주소 설정
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-broker:9092,EXTERNAL://localhost:29092
+      # 3. 중복을 없애고 모든 리스너의 프로토콜 매핑을 하나로 합침 (오타 교정)
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      # 4. 브로커 및 컨트롤러 지정
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-broker:9093
+      # 5. 기타 기본 설정들
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_LOG_DIRS=/tmp/kraft-combined-logs
+      # 하이버네이트나 최신 apache/kafka 이미지에서 크래시 방지를 위해 랜덤 ID 하나 넣어줍니다.
+      - CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk
+    networks:
+      - event-network
+
+# 볼륨 정의 (컨테이너가 꺼져도 DB 데이터가 날아가지 않게 유지)
+volumes:
+  postgres_data:
+  redis_data:
+
+# 컨테이너 간 내부 통신을 위한 네트워크 분리
+networks:
+  event-network:
+    driver: bridge

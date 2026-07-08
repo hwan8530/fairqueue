@@ -33,12 +33,12 @@ public class SecurityConfig {
         .csrf(AbstractHttpConfigurer::disable)
         .authorizeHttpRequests(
             auth -> auth.requestMatchers("/api/auth/signup", "/api/auth/login", "/api/events/*",
-                    "/api/events/**/stock", "/v3/api-docs/**", "/swagger-ui/**").permitAll()
-                .requestMatchers("/api/events/**/queue", "/api/events/**/queue/status",
-                    "/api/events/**/reservations", "/api/reservation/*", "/api/me/reservation")
+                    "/api/events/*/stock", "/v3/api-docs/**", "/swagger-ui/**").permitAll()
+                .requestMatchers("/api/events/*/queue", "/api/events/*/queue/status",
+                    "/api/events/*/reservations", "/api/reservation/*", "/api/me/reservation")
                 .authenticated()
                 .requestMatchers("/api/admin/events", "/api/admin/jobs", "/api/admin/jobs/*",
-                    "/api/admin/jobs/**/retry", "/api/admin/dlq", "/api/admin/dlq/**/requeue")
+                    "/api/admin/jobs/*/retry", "/api/admin/dlq", "/api/admin/dlq/*/requeue")
                 .hasRole("ADMIN"))
         .exceptionHandling(handle -> handle.authenticationEntryPoint(entryPoint))
         .addFilterBefore(new JwtFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class)

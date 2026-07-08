@@ -28,8 +28,8 @@ public interface EventMapper {
   public ResponseCreateEvent eventToResponseCreateEvent(Event event);
 
   @Mappings({
-      @Mapping(target = "eventId", source = "id"),
-      @Mapping(target = "remainingStock", source = "remaining_stock")
+      @Mapping(target = "eventId", source = "event.id"),
+      @Mapping(target = "remainingStock", source = "event.remaining_stock")
   })
   public ResponseEventStock eventToResponseEventStock(Event event, boolean soldOut);
 }

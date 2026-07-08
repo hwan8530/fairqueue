@@ -1,16 +1,22 @@
 package com.example.eventplatform.users.dto;
 
-import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 public class ResponseUsers {
 
-  @Setter
-  @AllArgsConstructor
+  @Getter
+  @NoArgsConstructor
   public static class ResponseSignUp {
 
     private Long userId;
     private String username;
+
+    public ResponseSignUp(Long userId, String username) {
+      this.userId = userId;
+      this.username = username;
+    }
   }
 
   @Setter

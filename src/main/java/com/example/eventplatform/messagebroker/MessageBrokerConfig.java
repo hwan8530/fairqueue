@@ -24,10 +24,10 @@ import tools.jackson.databind.ser.jdk.StringSerializer;
 public class MessageBrokerConfig {
 
   @Bean
-  public ProducerFactory<String, Object> producerFactory(@Value("${spring.kafka.host}") String ip,
-      @Value("${spring.kafka.port}") int port) {
+  public ProducerFactory<String, Object> producerFactory(
+      @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
     Map<String, Object> config = new HashMap<>();
-    config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, ip + ":" + port);
+    config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonJsonSerializer.class);
     return new DefaultKafkaProducerFactory<>(config);
@@ -40,10 +40,10 @@ public class MessageBrokerConfig {
   }
 
   @Bean
-  public ConsumerFactory<String, Object> consumerFactory(@Value("{$spring.Kafka.host}") String ip,
-      @Value("{$spring.Kafka.port}") int port) {
+  public ConsumerFactory<String, Object> consumerFactory(
+      @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
     Map<String, Object> config = new HashMap<>();
-    config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, ip + ":" + port);
+    config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JacksonJsonDeserializer.class);
     return new DefaultKafkaConsumerFactory<>(config);
