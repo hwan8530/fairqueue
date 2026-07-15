@@ -12,6 +12,7 @@ import com.example.eventplatform.users.entity.Users;
 import com.example.eventplatform.users.repository.UsersRepository;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
+@Slf4j
 public class UsersService {
 
   private final UsersRepository usersRepository;
@@ -45,7 +47,7 @@ public class UsersService {
     Users user = usersRepository.findByUsername(request.getUsername())
         .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.AUTH_FAILED));
 
-    if (passwordEncoder.matches(request.getPassword(), user.getPassword_hash())) {
+    if (!passwordEncoder.matches(request.getPassword(), user.getPassword_hash())) {
       throw new GlobalCustomException(GlobalExceptions.AUTH_FAILED);
     }
     // refresh token redis 저장

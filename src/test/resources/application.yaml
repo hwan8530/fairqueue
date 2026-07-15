@@ -17,5 +17,5 @@ jwt:
 
 logging:
   level:
-    root: info
+    com.example.eventplatform.users: debug
     org.hibernate.SQL: debug

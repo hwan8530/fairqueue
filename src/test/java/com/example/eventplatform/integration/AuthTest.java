@@ -5,9 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.example.eventplatform.users.dto.RequestUsers.RequestLogIn;
-import com.example.eventplatform.users.dto.RequestUsers.RequestSignUp;
 import com.example.eventplatform.users.dto.ResponseUsers.ResponseLogIn;
-import com.example.eventplatform.users.dto.ResponseUsers.ResponseSignUp;
 import com.example.eventplatform.users.entity.Users;
 import com.example.eventplatform.users.repository.UsersRepository;
 import java.time.LocalDateTime;
@@ -27,10 +25,10 @@ public class AuthTest extends IntegrationTestSupport {
 
   @Autowired
   private UsersRepository usersRepository;
-  
+
   @Autowired
   private PasswordEncoder passwordEncoder;
-  
+
   @BeforeEach
   void cleanUp() {
     try {
@@ -59,7 +57,7 @@ public class AuthTest extends IntegrationTestSupport {
     ResponseEntity<ResponseLogIn> responseLogin = restClient.post().uri("/api/auth/login")
         .contentType(MediaType.APPLICATION_JSON)
         .body(requestLogIn).retrieve().toEntity(ResponseLogIn.class);
-    
+
     assertNotNull(responseLogin);
     assertNotNull(responseLogin.getBody());
     assertEquals(200, responseLogin.getStatusCode().value());
