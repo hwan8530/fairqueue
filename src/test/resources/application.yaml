@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: eventplatform
+  thread.virtual.enabled: true # virtual thread 활성화 (Java 21 이상)
+  jpa:
+    hibernate:
+      ddl-auto: create
+
+# JWT 설정
+jwt:
+  access_token:
+    valid_time: 600000 # 10분
+  refresh_token:
+    valid_time: 7200000 # 2시간
+  secret: thisismysecretforjwt.needtoover32bytesmaybe.butthissample
+  entry_token_secret: thisisentry_token_secretforjwt.needtoover32bytes.butthisisample
+
+logging:
+  level:
+    root: info
+    org.hibernate.SQL: debug

@@ -12,6 +12,12 @@ public class RequestUsers {
     private String username;
     private String email;
     private String password;
+
+    public RequestSignUp(String username, String email, String password) {
+      this.username = username;
+      this.email = email;
+      this.password = password;
+    }
   }
 
   @Getter
@@ -20,6 +26,11 @@ public class RequestUsers {
 
     private String username;
     private String password;
+
+    public RequestLogIn(String username, String password) {
+      this.username = username;
+      this.password = password;
+    }
   }
 
 }

@@ -20,6 +20,8 @@ public class ResponseUsers {
   }
 
   @Setter
+  @Getter
+  @NoArgsConstructor
   public static class ResponseLogIn {
 
     private String accessToken;

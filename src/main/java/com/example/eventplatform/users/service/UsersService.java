@@ -10,7 +10,6 @@ import com.example.eventplatform.users.dto.ResponseUsers.ResponseLogIn;
 import com.example.eventplatform.users.dto.ResponseUsers.ResponseSignUp;
 import com.example.eventplatform.users.entity.Users;
 import com.example.eventplatform.users.repository.UsersRepository;
-import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,10 +34,8 @@ public class UsersService {
       throw new GlobalCustomException(GlobalExceptions.DUPLICATE_USER);
     }
     Users user = new Users();
-    user.setUsername(request.getUsername());
-    user.setEmail(request.getEmail());
-    user.setPassword_hash(passwordEncoder.encode(request.getPassword()));
-    user.setCreate_at(LocalDateTime.now());
+    user.create(request.getUsername(), request.getEmail(), passwordEncoder.encode(
+        request.getPassword()));
     usersRepository.save(user);
 
     return new ResponseSignUp(user.getId(), user.getUsername());
@@ -48,7 +45,7 @@ public class UsersService {
     Users user = usersRepository.findByUsername(request.getUsername())
         .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.AUTH_FAILED));
 
-    if (!request.getPassword().matches(user.getPassword_hash())) {
+    if (passwordEncoder.matches(request.getPassword(), user.getPassword_hash())) {
       throw new GlobalCustomException(GlobalExceptions.AUTH_FAILED);
     }
     // refresh token redis 저장

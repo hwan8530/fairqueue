@@ -29,7 +29,7 @@ public class Users {
   @NotNull
   private String email;
   @NotNull
-  @Column(columnDefinition = "VARCHAR(255)")
+  @Column(name = "password_hash", columnDefinition = "VARCHAR(255)")
   private String password_hash;
   @NotNull
   @Enumerated(EnumType.STRING)
@@ -37,4 +37,11 @@ public class Users {
   private Role role = Role.USER;
   @NotNull
   private LocalDateTime create_at;
+
+  public void create(String username, String email, String password_hash) {
+    this.username = username;
+    this.email = email;
+    this.password_hash = password_hash;
+    this.create_at = LocalDateTime.now();
+  }
 }
