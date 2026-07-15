@@ -1,24 +1,31 @@
 spring:
   application:
     name: eventplatform
+  thread.virtual.enabled: true # virtual thread 활성화 (Java 21 이상)
 
   # DB (PostgreSQL) 설정
   datasource:
-    driver-class-name: org.postgresql.Driver # 대소문자 오타 교정
-    # Podman 컴포즈와 로컬 호환을 위해 환경 변수 처리 (기본 DB명 mydatabase -> eventdb로 컴포즈와 일치 권장)
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/eventdb}
+    driver-class-name: org.postgresql.Driver
+    # Podman 컴포즈와 로컬 호환을 위해 환경 변수 처리
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/eventdb?options=-c%20statement_timeout=5000%20-c%20lock_timeout=3000}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:secret}
-
+    hikari:
+      connection-timeout: 3000 # 파이프를 얻기 위해 대기하는 시간 (3초)
+      maximum-pool-size: 10
+      max-lifetime: 1800000
+      idle-timeout: 600000
+  
   jpa:
     hibernate:
-      ddl-auto: update # 경로 정확하게 수정
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
         highlight_sql: true
         default_schema: public
+      jakarta.persistence.query.timeout: 5000 # 쿼리 실행 제한 시간 (5초, ms 단위)
 
   # Redis (대기열 및 키 만료 이벤트) 설정
   data:
@@ -28,7 +35,7 @@ spring:
 
   # Kafka (비동기 Job 워커 큐) 설정
   kafka:
-    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092} # 공식 표준 구조로 변경
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
     consumer:
       group-id: event-worker-group
       auto-offset-reset: earliest
@@ -40,7 +47,7 @@ spring:
     compose:
       enabled: false
 
-# JWT 설정 (작성하신 값 유지)
+# JWT 설정
 jwt:
   access_token:
     valid_time: 600000 # 10분
@@ -52,4 +59,4 @@ jwt:
 logging:
   level:
     root: info
-    org.hibernate.SQL: debug # SQL 로그를 더 명확히 보기 위한 팁
+    org.hibernate.SQL: debug

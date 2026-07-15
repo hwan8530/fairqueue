@@ -1,6 +1,7 @@
 package com.example.eventplatform.database;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
@@ -12,7 +13,6 @@ import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.scheduling.annotation.EnableAsync;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @Configuration
 @EnableAsync
@@ -54,17 +54,18 @@ public class DatabaseConfig {
   }
 
   /*
-   * Redis의 비동기성 처리를 위한 ThreadPool
+   * Redis의 비동기성 처리를 위한 ThreadPool -> Virtual Thread로 변경
    */
   @Bean(name = "redisAsyncExecutor")
   public Executor redisAsyncExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(5); // 기본 스레드 개수
-    executor.setMaxPoolSize(10); // 트래픽이 몰렸을 때 확장될 최대 스레드 개수
-    executor.setQueueCapacity(100); // 큐 최대 크기
-    executor.setThreadNamePrefix("RedisAsyncExecutor-"); // 스레드 이름 접두사 (로그 확인용)
-    executor.initialize();
-    return executor;
+//    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+//    executor.setCorePoolSize(5); // 기본 스레드 개수
+//    executor.setMaxPoolSize(10); // 트래픽이 몰렸을 때 확장될 최대 스레드 개수
+//    executor.setQueueCapacity(100); // 큐 최대 크기
+//    executor.setThreadNamePrefix("RedisAsyncExecutor-"); // 스레드 이름 접두사 (로그 확인용)
+//    executor.initialize();
+//    return executor;
+    return Executors.newVirtualThreadPerTaskExecutor();
   }
 
   @Bean
