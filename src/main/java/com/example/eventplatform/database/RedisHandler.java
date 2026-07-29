@@ -11,7 +11,6 @@ import java.util.Date;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,9 +42,10 @@ public class RedisHandler {
     return this.redisTemplate.opsForSet();
   }
 
+  // value 직렬화기가 StringRedisSerializer이므로(비-String을 넘기면 ClassCastException) 문자열로 저장한다.
   @Async("redisAsyncExecutor")
   public void putSet(String key, long value) {
-    redisTemplate.opsForSet().add(key, value);
+    redisTemplate.opsForSet().add(key, String.valueOf(value));
   }
 
   /*
@@ -71,19 +71,25 @@ public class RedisHandler {
       // WAITING QUEUE 에 없으므로 추가
       zSetOps.add(EventRedisKey.WAITING.generateKeyNoParam(eventId), username,
           System.currentTimeMillis());
-      // 순번 기억용 K-V 추가
+      // 순번 기억용 K-V 추가 (value 직렬화기가 StringRedisSerializer라 문자열로 저장해야 한다)
       zValueOps.set(EventRedisKey.WAITING_IDENTIFY.generateKey(eventId, username),
-          zSetOps.rank(EventRedisKey.WAITING.generateKeyNoParam(eventId), username) + 1);
+          String.valueOf(
+              zSetOps.rank(EventRedisKey.WAITING.generateKeyNoParam(eventId), username) + 1));
     }
-    long identifier = (long) Optional.ofNullable(
+    long identifier = Long.parseLong((String) Optional.ofNullable(
             zValueOps.get(EventRedisKey.WAITING_IDENTIFY.generateKey(eventId, username)))
-        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
+        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR)));
     return new QueueStruct(identifier,
         zSetOps.rank(EventRedisKey.WAITING.generateKeyNoParam(eventId), username), null, 0);
   }
 
-  @Async("redisAsyncExecutor")
-  public CompletableFuture<QueueStruct> queueStatus(long eventId, String username) {
+  /*
+   * 대기열 상태 조회. Redis 커맨드 몇 번만 순서대로 실행하는 짧은 동기 호출이라 별도 스레드로
+   * 넘길 이유가 없다 (예전에는 @Async였는데, 호출부인 EventService.queueStatus()가 즉시
+   * .get()으로 블로킹해서 실제 이득 없이 스레드 전환 비용만 내고 있었다. 자세한 배경은
+   * docs/async-blocking-fix.md 참고).
+   */
+  public QueueStruct queueStatus(long eventId, String username) {
     ZSetOperations<String, Object> zSetOps = redisTemplate.opsForZSet();
     ValueOperations<String, Object> zValueOps = redisTemplate.opsForValue();
 
@@ -98,17 +104,16 @@ public class RedisHandler {
     }
 
     // 2. IDENTIFY get
-    long identifier = (long) Optional.ofNullable(
+    long identifier = Long.parseLong((String) Optional.ofNullable(
             zValueOps.get(EventRedisKey.WAITING_IDENTIFY.generateKey(eventId, username)))
-        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.QUEUE_ENTRY_NOT_FOUND));
+        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.QUEUE_ENTRY_NOT_FOUND)));
 
     // 3. ENTRY_TOKEN 확인
     String entryToken = (String) zValueOps.get(
         EventRedisKey.ENTRY_TOKEN.generateKey(eventId, username));
     Long remainingTime = redisTemplate.getExpire(
         EventRedisKey.ENTRY_TOKEN.generateKey(eventId, username), TimeUnit.SECONDS);
-    return CompletableFuture.completedFuture(
-        new QueueStruct(identifier, rank, entryToken, remainingTime));
+    return new QueueStruct(identifier, rank, entryToken, remainingTime);
   }
 
   /*
@@ -151,9 +156,14 @@ public class RedisHandler {
     return redisAction != null && redisAction.toString().equals(entryToken);
   }
 
+  /*
+   * redisTemplate의 value 직렬화기가 StringRedisSerializer라서 String이 아닌 값을 넘기면
+   * (예전에는 long을 그대로 넘겨서) ClassCastException(Long -> String)이 난다. decrementEventStock의
+   * Lua 스크립트가 tonumber(GET stockKey)로 읽으므로, 여기서도 반드시 문자열로 저장해야 한다.
+   */
   public void createEventStock(long eventId, long stock) {
     redisTemplate.opsForValue()
-        .set(EventRedisKey.REMAINING_STOCK.generateKeyNoParam(eventId), stock);
+        .set(EventRedisKey.REMAINING_STOCK.generateKeyNoParam(eventId), String.valueOf(stock));
   }
 
   /*

@@ -10,12 +10,12 @@ import lombok.Setter;
 @AllArgsConstructor
 public class ResponseReservationList {
 
-  List<item> items;
+  List<Item> items;
 
   @Getter
   @Setter
   @AllArgsConstructor
-  public static class item {
+  public static class Item {
 
     long reservationId;
     long eventId;

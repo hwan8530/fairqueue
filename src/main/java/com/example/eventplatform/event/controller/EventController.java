@@ -4,7 +4,6 @@ import com.example.eventplatform.event.dto.ResponseEvent.ResponseEventDetail;
 import com.example.eventplatform.event.dto.ResponseEvent.ResponseEventStock;
 import com.example.eventplatform.event.dto.ResponseQueue.ResponseQueueStatus;
 import com.example.eventplatform.event.service.EventService;
-import java.util.concurrent.ExecutionException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,8 +36,7 @@ public class EventController {
   }
 
   @GetMapping("/{eventId}/queue/status")
-  public ResponseEntity<ResponseQueueStatus> getEventStatus(@PathVariable long eventId)
-      throws ExecutionException, InterruptedException {
+  public ResponseEntity<ResponseQueueStatus> getEventStatus(@PathVariable long eventId) {
     return ResponseEntity.status(HttpStatus.OK).body(eventService.queueStatus(eventId));
   }
 }

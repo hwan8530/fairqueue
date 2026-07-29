@@ -1,10 +1,8 @@
 package com.example.eventplatform.reservation.controller;
 
 import com.example.eventplatform.reservation.dto.ResponseReservation;
-import com.example.eventplatform.reservation.dto.ResponseReservation.reservationDTO;
+import com.example.eventplatform.reservation.dto.ResponseReservation.ReservationDTO;
 import com.example.eventplatform.reservation.service.ReservationService;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,14 +18,14 @@ public class ReservationController {
 
   private final ReservationService reservationService;
 
+  // 예약 생성. 서비스 메서드가 동기로 결과를 바로 반환하므로 그대로 상태 코드/본문에 매핑한다.
   @PostMapping("/api/events/{eventId}/reservations")
   public ResponseEntity<?> postReservation(@PathVariable long eventId,
       @RequestHeader("X-Entry-Token") String entryToken,
-      @RequestHeader("Idempotency-Key") String idempotencyKey)
-      throws ExecutionException, InterruptedException {
-    CompletableFuture<ResponseReservation<reservationDTO>> response = reservationService.makeReservation(
+      @RequestHeader("Idempotency-Key") String idempotencyKey) {
+    ResponseReservation<ReservationDTO> response = reservationService.makeReservation(
         eventId, entryToken, idempotencyKey);
-    return ResponseEntity.status(response.get().getStatus()).body(response.get().getData());
+    return ResponseEntity.status(response.getStatus()).body(response.getData());
   }
 
   @GetMapping("/api/reservations/{reservationId}")

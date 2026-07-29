@@ -1,6 +1,6 @@
 package com.example.eventplatform.event.service;
 
-import static com.example.eventplatform.common.CommonFunction.extractAuthentication;
+import static com.example.eventplatform.common.CommonFunction.currentUsername;
 
 import com.example.eventplatform.database.EventRedisKey;
 import com.example.eventplatform.database.RedisHandler;
@@ -19,12 +19,10 @@ import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,14 +70,12 @@ public class EventService {
 
   @Transactional
   public ResponseQueueStatus enQueueWaiting(long eventId) {
-    Authentication authentication = extractAuthentication();
     Event event = findEvent(eventId); // event 존재 여부 확인
     if (event.getStatus() != EventStatus.SCHEDULED && event.getStatus() != EventStatus.OPEN) {
       throw new GlobalCustomException(GlobalExceptions.EVENT_NOT_OPEN);
     }
 
-    QueueStruct queueStruct = redisHandler.enQueueWaiting(eventId,
-        (String) authentication.getPrincipal());
+    QueueStruct queueStruct = redisHandler.enQueueWaiting(eventId, currentUsername());
     return new ResponseQueueStatus(eventId, queueStruct.getIdentifier(), queueStruct.getRank(),
         queueStruct.getRank() == 0, queueStruct.getEntryToken(), queueStruct.getEntryTokenTtlSec());
   }
@@ -87,14 +83,12 @@ public class EventService {
   /*
   큐 상태 확인 메소드
   클라이언트가 이 메소드를 주기적으로 호출하면 큐 상태만 반환하는게 아닌 주기적인 입장도 여기서 처리해줘야함
+  (redisHandler.queueStatus는 동기 호출로 변경됨 - 예전에는 @Async였는데 여기서 바로 .get()으로
+  블로킹해서 비동기 이점 없이 스레드 전환 비용만 내고 있었다. docs/async-blocking-fix.md 참고)
   */
-  public ResponseQueueStatus queueStatus(long eventId)
-      throws ExecutionException, InterruptedException {
-    Authentication authentication = extractAuthentication();
+  public ResponseQueueStatus queueStatus(long eventId) {
     findEvent(eventId); // event 존재 여부만 확인
-    QueueStruct queueStruct = redisHandler.queueStatus(eventId,
-            (String) authentication.getPrincipal())
-        .get();
+    QueueStruct queueStruct = redisHandler.queueStatus(eventId, currentUsername());
     return new ResponseQueueStatus(eventId, queueStruct.getIdentifier(), queueStruct.getRank(),
         queueStruct.getRank() == 0, queueStruct.getEntryToken(), queueStruct.getEntryTokenTtlSec());
   }
@@ -137,8 +131,10 @@ public class EventService {
     }
   }
 
+  // eventId는 URL 경로에서 그대로 온 사용자 입력이므로, 없으면 클라이언트 귀책(404)이지 서버
+  // 내부 오류(500)가 아니다.
   private Event findEvent(long eventId) {
     return eventRepository.findById(eventId)
-        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
+        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.EVENT_NOT_FOUND));
   }
 }

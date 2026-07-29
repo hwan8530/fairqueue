@@ -1,6 +1,7 @@
 package com.example.eventplatform.users.service;
 
 import com.example.eventplatform.database.RedisHandler;
+import com.example.eventplatform.database.UserRedisKey;
 import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
 import com.example.eventplatform.security.JwtUtil;
@@ -50,12 +51,12 @@ public class UsersService {
     if (!passwordEncoder.matches(request.getPassword(), user.getPassword_hash())) {
       throw new GlobalCustomException(GlobalExceptions.AUTH_FAILED);
     }
-    // refresh token redis 저장
-    String redisKey = user.getUsername() + ":refresh_token";
+    // refresh token redis 저장 (키는 반드시 UserRedisKey를 통해서만 조립 - docs/redis-key-convention.md)
+    String redisKey = UserRedisKey.REFRESH_TOKEN.generateKey(user.getUsername());
     redisHandler.setStringWithTtl(redisKey, jwtUtil.makeRefreshToken(user.getUsername()),
         jwtUtil.refreshTokenExpiresIn(), TimeUnit.SECONDS);
 
-    return new ResponseLogIn(jwtUtil.makeAccessToken(user.getUsername()),
+    return new ResponseLogIn(jwtUtil.makeAccessToken(user.getUsername(), user.getRole()),
         jwtUtil.accessTokenExpiresIn());
 
 

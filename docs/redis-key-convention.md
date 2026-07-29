@@ -35,6 +35,12 @@
 | `ACTIVE_EVENTS` | `active:events` | `active:events` | SET | 현재 OPEN 상태인 이벤트 id 집합 |
 | `REMAINING_STOCK` | `remaining_stock:` | `remaining_stock:100` | STRING(counter) | 원자적 재고 차감/복구용 카운터 |
 
+### `UserRedisKey` (도메인: 사용자)
+
+| 상수 | 접두사 | 최종 키 예시 | 자료구조 | 용도 / TTL |
+|---|---|---|---|---|
+| `REFRESH_TOKEN` | `refresh_token:` | `refresh_token:alice` | STRING | 로그인 시 발급되는 refresh token. TTL = `jwt.refresh_token.valid_time` |
+
 ### `JobRedisKey` (도메인: Job 상태 전이 트리거)
 
 | 상수 | 접두사 | 최종 키 예시 | 자료구조 | 용도 / TTL |

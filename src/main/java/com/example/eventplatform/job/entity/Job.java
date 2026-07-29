@@ -76,13 +76,6 @@ public class Job {
     this.next_run_at = now.plusSeconds(1);
   }
 
-  public LocalDateTime enQueueJob() {
-    this.status = JobStatus.QUEUED;
-    this.updated_at = LocalDateTime.now();
-    this.next_run_at = LocalDateTime.now().plusSeconds(1);
-    return next_run_at;
-  }
-
   public int remainingAttempts() {
     return max_attempts - (attempts + 1);
   }

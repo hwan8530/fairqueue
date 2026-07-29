@@ -10,6 +10,10 @@ public enum GlobalExceptions {
   INVALID_ENTRY_TOKEN("E1004", 403, "INVALID_ENTRY_TOKEN - 입장 토큰 없음/만료"),
   QUEUE_NOT_ADMITTED("E1005", 403, "QUEUE_NOT_ADMITTED - 아직 입장 불가"),
   QUEUE_ENTRY_NOT_FOUND("E1006", 404, "QUEUE_ENTRY_NOT_FOUND - 대기열에 없음"),
+  // 명세서 부록(17.1)에는 없는 코드지만, 존재하지 않는 eventId 요청은 클라이언트 귀책(404)이지
+  // 서버 내부 오류(500)가 아니다. 예전엔 INTERNAL_ERROR로 뭉뚱그려져 있었다
+  // (docs/refactoring-and-abstraction-review.md C2 참고).
+  EVENT_NOT_FOUND("E1007", 404, "EVENT_NOT_FOUND - 존재하지 않는 이벤트"),
   RESERVATION_NOT_FOUND("E2001", 404, "RESERVATION_NOT_FOUND"),
   RESERVATION_NOT_CANCELLABLE("E2002", 409, "RESERVATION_NOT_CANCELLABLE - 취소 불가 상태"),
   VALIDATION_FAILED("E4001", 400, "VALIDATION_FAILED"),

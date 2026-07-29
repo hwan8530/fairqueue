@@ -47,6 +47,10 @@ spring:
     compose:
       enabled: false
 
+# Job 큐 엔진 설정
+job:
+  stale-lock-seconds: ${JOB_STALE_LOCK_SECONDS:60} # RUNNING에서 이 시간(초) 이상 멈추면 워커 장애로 간주하고 회수
+
 # JWT 설정
 jwt:
   access_token:
