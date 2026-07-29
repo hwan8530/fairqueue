@@ -5,6 +5,7 @@ import com.example.eventplatform.exception.GlobalExceptions;
 import com.example.eventplatform.job.service.JobService;
 import com.example.eventplatform.reservation.entity.Reservation;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class ReservationConfirmationListener {
 
   /*
@@ -41,8 +43,10 @@ public class ReservationConfirmationListener {
       jobService.makeSchedule(topic, reservation);
       acknowledgment.acknowledge();
     } catch (Exception e) {
-      // Message 수신 실패 등에 대한 예외처리 필요
-      // 임시로 Global Exception throw 하도록 설계
+      // 원인을 지운 채 INTERNAL_ERROR만 던지면 컨슈머 재시도 로그에서 실제 원인을 알 수 없다
+      // (디버깅하다가 이 문제로 실제 원인을 찾는 데 시간이 걸렸다).
+      log.error("CONFIRM_RESERVATION Job 등록 실패 (idempotencyKey={})",
+          reservation.getIdempotency_key(), e);
       throw new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR);
     }
   }

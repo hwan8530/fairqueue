@@ -71,10 +71,16 @@ public class RedisHandler {
       // WAITING QUEUE 에 없으므로 추가
       zSetOps.add(EventRedisKey.WAITING.generateKeyNoParam(eventId), username,
           System.currentTimeMillis());
+      // add 직후 rank를 다시 읽는 사이, moveQueueToAllow 스케줄러가 그새 popMin으로 이 유저를
+      // 먼저 admit(pop)해버리면 rank가 null이 될 수 있다 - 실제로 통합 테스트에서 재현된
+      // 레이스다 (docs/refactoring-and-abstraction-review.md 참고). null이면 이미 입장
+      // 처리된 것이므로 순번을 0으로 취급한다.
+      Long rankAfterAdd = zSetOps.rank(EventRedisKey.WAITING.generateKeyNoParam(eventId),
+          username);
+      long nextIdentifier = (rankAfterAdd != null ? rankAfterAdd : 0L) + 1;
       // 순번 기억용 K-V 추가 (value 직렬화기가 StringRedisSerializer라 문자열로 저장해야 한다)
       zValueOps.set(EventRedisKey.WAITING_IDENTIFY.generateKey(eventId, username),
-          String.valueOf(
-              zSetOps.rank(EventRedisKey.WAITING.generateKeyNoParam(eventId), username) + 1));
+          String.valueOf(nextIdentifier));
     }
     long identifier = Long.parseLong((String) Optional.ofNullable(
             zValueOps.get(EventRedisKey.WAITING_IDENTIFY.generateKey(eventId, username)))
@@ -130,11 +136,16 @@ public class RedisHandler {
         EventRedisKey.WAITING.generateKeyNoParam(eventId), allowCount);
     for (TypedTuple<?> o : popedQueue) {
       String username = Objects.requireNonNull(o.getValue()).toString();
-      zSetOps.add(EventRedisKey.ALLOWED.generateKeyNoParam(eventId), username,
-          System.currentTimeMillis() + ttl * 1000); // ttl 은 초단위니까 밀리초 단위로 맞춰주기 위한 연산
+      // ENTRY_TOKEN을 먼저 저장한 뒤에 ALLOWED에 추가한다. 순서가 반대였을 때는(예전 코드)
+      // "ALLOWED 등록 -> ENTRY_TOKEN 저장" 사이의 짧은 순간에 큐 상태 조회가 끼어들면
+      // admitted=true인데 entryToken=null인 상태를 실제로 관찰할 수 있었다 - 통합 테스트로
+      // 재현해서 발견했다 (docs/refactoring-and-abstraction-review.md 참고). 클라이언트가
+      // admitted=true를 봤을 때 entryToken도 항상 같이 준비돼 있도록 순서를 바꿨다.
       zValueOps.set(EventRedisKey.ENTRY_TOKEN.generateKey(eventId, username),
           jwtUtil.makeEntryToken(username, new Date(System.currentTimeMillis()), ttl),
           Duration.ofSeconds(ttl)); // entry_token:{eventId}:username TTL: 30seconds
+      zSetOps.add(EventRedisKey.ALLOWED.generateKeyNoParam(eventId), username,
+          System.currentTimeMillis() + ttl * 1000); // ttl 은 초단위니까 밀리초 단위로 맞춰주기 위한 연산
       zValueOps.getAndExpire(EventRedisKey.WAITING_IDENTIFY.generateKey(eventId, username),
           Duration.ofSeconds(ttl));
     }

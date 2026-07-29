@@ -5,6 +5,14 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create
+  # main의 application.yaml과 이름이 같아 테스트 클래스패스에서 이 파일이 완전히 대체한다
+  # (병합되지 않음) - kafka.listener.ack-mode가 여기 없으면 @KafkaListener의
+  # Acknowledgment 파라미터가 "MANUAL AckMode가 아니다"라는 IllegalStateException으로
+  # 항상 실패한다. 통합 테스트로 실제 예약 확정 흐름을 처음 검증하면서 발견했다
+  # (docs/refactoring-and-abstraction-review.md 참고). main 설정과 반드시 맞춰야 한다.
+  kafka:
+    listener:
+      ack-mode: manual_immediate
 
 # JWT 설정
 jwt:

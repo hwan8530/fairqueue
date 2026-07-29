@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import com.example.eventplatform.event.repository.EventRepository;
+import com.example.eventplatform.reservation.repository.ReservationRepository;
 import com.example.eventplatform.users.dto.RequestUsers.RequestLogIn;
 import com.example.eventplatform.users.dto.ResponseUsers.ResponseLogIn;
 import com.example.eventplatform.users.entity.Users;
@@ -25,13 +27,21 @@ public class AuthTest extends IntegrationTestSupport {
 
   @Autowired
   private UsersRepository usersRepository;
+  @Autowired
+  private ReservationRepository reservationRepository;
+  @Autowired
+  private EventRepository eventRepository;
 
   @Autowired
   private PasswordEncoder passwordEncoder;
 
+  // 다른 통합 테스트(ReservationFlowTest)가 같은 정적 컨테이너 DB에 Reservation을 남기면
+  // Users보다 먼저 지워야 FK 위반이 안 난다 (SecurityConfigTest와 동일한 이유).
   @BeforeEach
   void cleanUp() {
     try {
+      reservationRepository.deleteAll();
+      eventRepository.deleteAll();
       usersRepository.deleteAll();
       usersRepository.flush();
     } catch (Exception e) {

@@ -27,7 +27,10 @@ import lombok.Setter;
 @Setter
 public class Reservation {
 
-  @NotNull
+  // IDENTITY 생성 전략의 id에 @NotNull을 붙이면 Hibernate의 pre-insert Bean Validation이
+  // "아직 DB가 채번하지 않아 null인 게 정상"인 시점에 걸려서 모든 INSERT가
+  // ConstraintViolationException으로 실패한다 - 예약 생성 자체가 항상 500이었다
+  // (docs/refactoring-and-abstraction-review.md 참고). Event/Job/Users 엔티티는 이 실수가 없다.
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;

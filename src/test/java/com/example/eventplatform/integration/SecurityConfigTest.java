@@ -2,6 +2,8 @@ package com.example.eventplatform.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.example.eventplatform.event.repository.EventRepository;
+import com.example.eventplatform.reservation.repository.ReservationRepository;
 import com.example.eventplatform.users.dto.RequestUsers.RequestLogIn;
 import com.example.eventplatform.users.dto.RequestUsers.RequestSignUp;
 import com.example.eventplatform.users.dto.ResponseUsers.ResponseLogIn;
@@ -32,9 +34,23 @@ public class SecurityConfigTest extends IntegrationTestSupport {
 
   @Autowired
   private UsersRepository usersRepository;
+  @Autowired
+  private ReservationRepository reservationRepository;
+  @Autowired
+  private EventRepository eventRepository;
 
+  /*
+   * 이 클래스와 ReservationFlowTest가 같은 정적 Testcontainers DB를 공유한다
+   * (IntegrationTestSupport). Reservation이 Users를 FK로 참조하므로 Users보다 먼저
+   * 지워야 한다 - 순서를 안 지키면 "update or delete on table users violates foreign
+   * key constraint"로 이 클래스의 모든 테스트가 실패한다. 예전엔 예약 생성 자체가 항상
+   * 실패해서(이번에 고친 여러 버그들) Reservation 행이 생긴 적이 없어 이 문제가 드러나지
+   * 않았다 (docs/refactoring-and-abstraction-review.md 참고).
+   */
   @BeforeEach
   void cleanUp() {
+    reservationRepository.deleteAll();
+    eventRepository.deleteAll();
     usersRepository.deleteAll();
   }
 

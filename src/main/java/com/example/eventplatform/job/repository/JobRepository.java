@@ -15,7 +15,11 @@ public interface JobRepository extends JpaRepository<Job, Long> {
   @Query("select j from Job j where j.idempotency_key = :idempotency_key")
   Optional<Job> findByIdempotency_key(@Param("idempotency_key") String idempotency_key);
 
-  @Query("select j from Job j where j.idempotency_key = :idempotency_key")
+  // 반환 타입이 primitive boolean인데 "select j ..."는 매칭되는 행이 없으면 null을 돌려줘서
+  // "Null return value ... does not match primitive return type" 예외가 났다 - makeSchedule()의
+  // 첫 호출부터 항상 실패해서 CONFIRM_RESERVATION Job이 한 번도 만들어지지 못했다
+  // (docs/refactoring-and-abstraction-review.md 참고). count(j) > 0으로 실제 boolean을 만든다.
+  @Query("select count(j) > 0 from Job j where j.idempotency_key = :idempotency_key")
   boolean existsByIdempotency_key(@Param("idempotency_key") String idempotency_key);
 
   /*

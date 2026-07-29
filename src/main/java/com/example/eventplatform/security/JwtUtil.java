@@ -55,9 +55,12 @@ public class JwtUtil {
         .claim("username", username).signWith(TOKEN_SECRET).compact();
   }
 
+  // ttl은 초 단위로 받는데(호출부는 Duration.ofSeconds(ttl)로 Redis TTL을 건다), 여기서
+  // now.getTime()(밀리초)에 그대로 더하면 만료 시각이 사실상 즉시(ttl밀리초 뒤)가 돼버린다 -
+  // Redis 키의 TTL(초)과 JWT 내부 exp 클레임(밀리초 오해)이 서로 다른 단위로 계산되고 있었다.
   public String makeEntryToken(String username, Date now, long ttl) {
     return Jwts.builder().subject("Entry Token").issuedAt(now)
-        .expiration(new Date(now.getTime() + ttl)).claim("username", username)
+        .expiration(new Date(now.getTime() + ttl * 1000)).claim("username", username)
         .claim("ttl", ttl).signWith(ENTRY_TOKEN_SECRET).compact();
   }
 

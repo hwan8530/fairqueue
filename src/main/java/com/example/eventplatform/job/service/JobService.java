@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -129,7 +130,17 @@ public class JobService {
    *   3) reclaimStaleRunningJobs - RUNNING에서 멈춘 채 죽은 워커의 Job 회수
    * 세 단계 모두 Redis 알림 경로와 동일한 전이 메서드/원자 클레임을 재사용하므로, 이 폴러가
    * 켜져 있든 꺼져 있든 최종 동작은 같고 "얼마나 빨리 회수되는가"만 달라진다.
+   *
+   * propagation = NOT_SUPPORTED로 이 메서드 자체는 트랜잭션을 열지 않는다. 클래스 레벨
+   * @Transactional(readOnly = true)를 그대로 물려받게 두면(메서드에 별도 애노테이션이 없어서
+   * 상속됨), self.enQueue()/self.start()/self.reclaimStaleJob() 호출이 REQUIRED 전파로 이
+   * 읽기전용 트랜잭션에 합류해버려 내부의 UPDATE(claimForQueue/claimForRunning/reclaimStale)가
+   * 전부 "cannot execute UPDATE in a read-only transaction"으로 실패한다 - 통합 테스트로
+   * Job이 실제 있는 상태에서 폴러를 처음 돌려보고서야 드러난 버그다
+   * (docs/refactoring-and-abstraction-review.md 참고). 이 메서드가 트랜잭션 없이 실행되면
+   * self.xxx() 각각이 자기 소유의 새 (쓰기 가능한) 트랜잭션을 연다.
    */
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   @Scheduled(fixedDelay = 1000)
   public void pollDueJobs() {
     LocalDateTime now = LocalDateTime.now();
