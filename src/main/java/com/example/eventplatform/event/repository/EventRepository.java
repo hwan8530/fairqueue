@@ -1,6 +1,7 @@
 package com.example.eventplatform.event.repository;
 
 import com.example.eventplatform.event.entity.Event;
+import com.example.eventplatform.event.entity.EventStatus;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
@@ -11,7 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface EventRepository extends JpaRepository<Event, Long> {
 
-  List<Event> findByStatus(String status);
+  List<Event> findByStatus(EventStatus status);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select e from Event e where e.id = :id")

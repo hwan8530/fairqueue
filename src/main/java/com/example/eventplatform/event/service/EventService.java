@@ -12,6 +12,7 @@ import com.example.eventplatform.event.dto.ResponseEvent.ResponseEventStock;
 import com.example.eventplatform.event.dto.ResponseQueue.ResponseQueueStatus;
 import com.example.eventplatform.event.entity.Event;
 import com.example.eventplatform.event.entity.EventStatus;
+import com.example.eventplatform.event.entity.EventType;
 import com.example.eventplatform.event.mapper.EventMapper;
 import com.example.eventplatform.event.repository.EventRepository;
 import com.example.eventplatform.exception.GlobalCustomException;
@@ -39,15 +40,22 @@ public class EventService {
 
   @Transactional
   public ResponseCreateEvent createEvent(RequestCreateEvent request) {
+    EventType type;
+    try {
+      type = EventType.valueOf(request.getType());
+    } catch (IllegalArgumentException e) {
+      throw new GlobalCustomException(GlobalExceptions.VALIDATION_FAILED);
+    }
     Event event = Event.builder()
         .name(request.getName())
-        .type(request.getType())
+        .type(type)
         .total_stock(request.getTotalStock())
         .per_user_limit(request.getPerUserLimit())
         .open_at(request.getOpenAt())
         .close_at(request.getCloseAt())
         .build();
     eventRepository.save(event);
+    redisHandler.createEventStock(event.getId(), event.getTotal_stock());
 
     return eventMapper.eventToResponseCreateEvent(event);
   }
@@ -66,9 +74,7 @@ public class EventService {
   public ResponseQueueStatus enQueueWaiting(long eventId) {
     Authentication authentication = extractAuthentication();
     Event event = findEvent(eventId); // event 존재 여부 확인
-    String eventStatus = event.getStatus().getStatus();
-    if (!eventStatus.equals(EventStatus.SCHEDULED.getStatus())
-        || !eventStatus.equals(EventStatus.OPEN.getStatus())) {
+    if (event.getStatus() != EventStatus.SCHEDULED && event.getStatus() != EventStatus.OPEN) {
       throw new GlobalCustomException(GlobalExceptions.EVENT_NOT_OPEN);
     }
 
@@ -101,7 +107,7 @@ public class EventService {
   @Scheduled(fixedDelay = 1000)
   @Transactional
   public void activateEvent() {
-    List<Event> eventList = eventRepository.findByStatus(EventStatus.SCHEDULED.getStatus());
+    List<Event> eventList = eventRepository.findByStatus(EventStatus.SCHEDULED);
     for (Event event : eventList) {
       if (event.getOpen_at().isBefore(LocalDateTime.now()) || event.getOpen_at()
           .isEqual(LocalDateTime.now())) {
@@ -122,7 +128,7 @@ public class EventService {
   @Scheduled(fixedDelay = 1000)
   @Transactional
   public void moveQueueToAllow() {
-    List<Event> eventList = eventRepository.findByStatus(EventStatus.OPEN.name());
+    List<Event> eventList = eventRepository.findByStatus(EventStatus.OPEN);
     int maxAllowedCount = 5; // 초당 5명 허용
     long ttl = 30; // TTL 30초
     for (Event event : eventList) {
@@ -134,12 +140,5 @@ public class EventService {
   private Event findEvent(long eventId) {
     return eventRepository.findById(eventId)
         .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
-  }
-
-  @Transactional
-  public long decreaseRemainingStock(long eventId) {
-    Event event = eventRepository.findByIdWithLock(eventId)
-        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
-    return event.decreaseRemainingStock();
   }
 }

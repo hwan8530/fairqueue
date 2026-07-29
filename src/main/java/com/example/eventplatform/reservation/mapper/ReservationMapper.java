@@ -13,15 +13,11 @@ public interface ReservationMapper {
 
   @Mappings({
       @Mapping(target = "reservationId", source = "id"),
-      @Mapping(target = "status", source = "status.status"),
       @Mapping(target = "issuedCode", source = "issued_code"),
       @Mapping(target = "expiresAt", source = "expires_at")
   })
   public reservationDTO toResponse(Reservation reservation);
 
-  @Mappings({
-      @Mapping(target = "reservationId", source = "id"),
-      @Mapping(target = "status", source = "status.status")
-  })
+  @Mapping(target = "reservationId", source = "id")
   public deleteReservationDTO toDeleteResponse(Reservation reservation);
 }

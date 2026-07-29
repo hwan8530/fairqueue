@@ -172,6 +172,14 @@ public class RedisHandler {
     return result;
   }
 
+  /*
+  취소/만료/실패로 인한 재고 복구용. decrementEventStock과 대칭되는 연산.
+   */
+  public void incrementEventStock(long eventId, long amount) {
+    redisTemplate.opsForValue()
+        .increment(EventRedisKey.REMAINING_STOCK.generateKeyNoParam(eventId), amount);
+  }
+
   public void makeJobWithTtl(String key, LocalDateTime next_run_at) {
     ValueOperations<String, Object> valueOps = redisTemplate.opsForValue();
     valueOps.set(key, "", Duration.between(LocalDateTime.now(), next_run_at));

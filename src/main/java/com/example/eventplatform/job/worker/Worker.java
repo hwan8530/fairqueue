@@ -32,14 +32,4 @@ public class Worker { // 기술적인 영역만 component에서 처리
     }
   }
 
-  @KafkaListener(topics = "QUEUED", groupId = "queued-worker")
-  public void enQueueReservation(Long jobId, Acknowledgment acknowledgment) {
-    try {
-      jobService.enQueue(jobId);
-      acknowledgment.acknowledge();
-    } catch (Exception e) {
-      throw new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR);
-    }
-  }
-
 }

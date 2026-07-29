@@ -55,20 +55,23 @@ public class Event {
   private LocalDateTime create_at;
 
   @Builder
-  public Event(String name, String type, int total_stock, int per_user_limit, LocalDateTime open_at,
-      LocalDateTime close_at) {
+  public Event(String name, EventType type, int total_stock, int per_user_limit,
+      LocalDateTime open_at, LocalDateTime close_at) {
     this.name = name;
-    this.type = EventType.fromStringType(type);
+    this.type = type;
     this.total_stock = total_stock;
+    this.remaining_stock = total_stock;
     this.per_user_limit = per_user_limit;
     this.open_at = open_at;
     this.close_at = close_at;
-    if (this.open_at.isBefore(LocalDateTime.now())) {
-      this.status = EventStatus.OPEN;
-    } else if (this.open_at.isAfter(LocalDateTime.now())) {
+    LocalDateTime now = LocalDateTime.now();
+    this.create_at = now;
+    if (this.open_at.isAfter(now)) {
       this.status = EventStatus.SCHEDULED;
-    } else if (this.close_at != null && this.close_at.isBefore(LocalDateTime.now())) {
+    } else if (this.close_at != null && !this.close_at.isAfter(now)) {
       this.status = EventStatus.CLOSED;
+    } else {
+      this.status = EventStatus.OPEN;
     }
   }
 
@@ -79,5 +82,12 @@ public class Event {
     } else {
       return 0;
     }
+  }
+
+  public long increaseRemainingStock() {
+    if (this.remaining_stock < this.total_stock) {
+      this.remaining_stock++;
+    }
+    return remaining_stock;
   }
 }

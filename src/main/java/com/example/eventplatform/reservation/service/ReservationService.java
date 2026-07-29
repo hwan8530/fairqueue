@@ -35,6 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReservationService {
 
+  private static final List<ReservationStatus> ACTIVE_STATUSES =
+      List.of(ReservationStatus.PENDING, ReservationStatus.CONFIRMED);
+
   private final RedisHandler redisHandler;
   private final ReservationRepository reservationRepository;
   private final EventRepository eventRepository;
@@ -56,53 +59,47 @@ public class ReservationService {
     }
 
     Optional<Reservation> optional = reservationRepository.findByIdempotencyKey(idempotencyKey);
-    if (optional.isPresent()) { // idempotencyKey 중복
+    if (optional.isPresent()) { // idempotencyKey 중복 -> 새로 만들지 않고 기존 결과 그대로 반환 (멱등)
       Reservation reservation = optional.get();
       reservationDTO dto = reservationMapper.toResponse(reservation);
       ResponseReservation<reservationDTO> responseReservation = new ResponseReservation<>();
       responseReservation.setStatus(200);
       responseReservation.setData(dto);
       return CompletableFuture.completedFuture(responseReservation);
-    } else { // 신규 생성
-      Event event = eventRepository.findByIdWithLock(eventId)
-          .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
-
-      // event open 확인
-      if (!event.getStatus().getStatus().equals(EventStatus.OPEN.getStatus())) {
-        throw new GlobalCustomException(GlobalExceptions.EVENT_NOT_OPEN);
-      }
-
-      // 재고 원자 차감 (성공 시에만 진행)
-      long result = redisHandler.decrementEventStock(eventId, event.getPer_user_limit());
-      if (result == 1) {
-        event.setRemaining_stock(event.getRemaining_stock() - event.getPer_user_limit());
-        // 같은 사용자의 다른 예약이 있는지 확인
-        List<Reservation> reservationList = reservationRepository.findByUsername(username);
-        if (!reservationList.isEmpty() && reservationList.size() >= reservationList.getFirst()
-            .getEvent().getPer_user_limit()) {
-          throw new GlobalCustomException(GlobalExceptions.DUPLICATE_USER);
-        }
-
-        Optional<Event> eventOptional = eventRepository.findById(eventId);
-        Optional<Users> usersOptional = usersRepository.findByUsername(username);
-        if (eventOptional.isEmpty() || usersOptional.isEmpty()) {
-          throw new GlobalCustomException(
-              GlobalExceptions.INTERNAL_ERROR); // 명시된 에러가 없어서 Internal error
-        }
-        Reservation reservation = Reservation.builder().event(eventOptional.get())
-            .user(usersOptional.get()).idempotency_key(idempotencyKey).build();
-        reservationRepository.save(reservation);
-        kafkaProducer.sendMessage("confirm_reservation", reservation); // kafka를 통한 메세지 발행
-        reservationDTO dto = reservationMapper.toResponse(reservation);
-        ResponseReservation<reservationDTO> responseReservation = new ResponseReservation<>();
-        responseReservation.setStatus(202);
-        responseReservation.setData(dto);
-        return CompletableFuture.completedFuture(responseReservation);
-      } else { // SOLD_OUT
-        event.setRemaining_stock(0);
-        throw new GlobalCustomException(GlobalExceptions.SOLD_OUT);
-      }
     }
+
+    Event event = eventRepository.findByIdWithLock(eventId)
+        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
+
+    if (event.getStatus() != EventStatus.OPEN) {
+      throw new GlobalCustomException(GlobalExceptions.EVENT_NOT_OPEN);
+    }
+
+    // 1인 한도 체크 - 재고를 건드리기 전에 먼저 확인해야 실패 시 롤백할 부수효과가 없다
+    long activeCount = reservationRepository.countByEvent_IdAndUser_UsernameAndStatusIn(eventId,
+        username, ACTIVE_STATUSES);
+    if (activeCount >= event.getPer_user_limit()) {
+      throw new GlobalCustomException(GlobalExceptions.ALREADY_RESERVED);
+    }
+
+    // 재고 원자 차감 (Redis Lua 스크립트, 성공 시에만 진행) - 1건 예약이므로 항상 1개만 차감
+    if (redisHandler.decrementEventStock(eventId, 1) == 0) {
+      throw new GlobalCustomException(GlobalExceptions.SOLD_OUT);
+    }
+    event.decreaseRemainingStock();
+
+    Users user = usersRepository.findByUsername(username)
+        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
+    Reservation reservation = Reservation.builder().event(event)
+        .user(user).idempotency_key(idempotencyKey).build();
+    reservationRepository.save(reservation);
+    kafkaProducer.sendMessage("confirm_reservation", reservation); // kafka를 통한 메세지 발행
+
+    reservationDTO dto = reservationMapper.toResponse(reservation);
+    ResponseReservation<reservationDTO> responseReservation = new ResponseReservation<>();
+    responseReservation.setStatus(202);
+    responseReservation.setData(dto);
+    return CompletableFuture.completedFuture(responseReservation);
   }
 
   public reservationDTO getReservation(
@@ -122,11 +119,8 @@ public class ReservationService {
   }
 
   /*
-  PENDING 상태의 예약을 삭제하고 EVENT의 재고를 증가시켜주는 메소드 -> 동시성 문제 발생가능.
-  동시성 문제 해결 방안 3가지 모두 구현해야함
-  1. DB 비관적 락 (SELECT FOR UPDATE)
-  2. DB 낙관적 락 (version column 사용해서 객체 내의 값을 변경 시킬 때 명시적으로 변경했다고 기록)
-  3. REDIS 원자 연산 (DECR/Lua 스크립트로 재고 증감 후 DB 반영)
+  PENDING 상태의 예약을 취소(CANCELLED)하고 EVENT의 재고를 복구하는 메소드.
+  재고 복구는 DB(비관적 락으로 보호)와 Redis(원자 카운터) 양쪽에 대칭으로 반영한다.
    */
   @Transactional
   public deleteReservationDTO deleteReservation(long reservationId) {
@@ -143,20 +137,19 @@ public class ReservationService {
       throw new GlobalCustomException(GlobalExceptions.FORBIDDEN);
     }
 
-    if (!reservation.getStatus().getStatus().equals(ReservationStatus.PENDING.getStatus())) {
+    if (reservation.getStatus() != ReservationStatus.PENDING) {
       throw new GlobalCustomException(GlobalExceptions.RESERVATION_NOT_CANCELLABLE);
     }
 
-    deleteReservationDTO dto = reservationMapper.toDeleteResponse(reservation);
     Event event = eventRepository.findByIdWithLock(reservation.getEvent().getId())
         .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR)); // 비관적 락 획득
-    if (event.getRemaining_stock() + 1 > event.getTotal_stock()) {
-      event.setRemaining_stock(event.getRemaining_stock());
-    } else {
-      event.setRemaining_stock(event.getRemaining_stock() + 1);
+    if (event.getRemaining_stock() < event.getTotal_stock()) {
+      event.increaseRemainingStock();
+      redisHandler.incrementEventStock(event.getId(), 1);
     }
-    reservationRepository.delete(reservation);
-    return dto;
+    reservation.cancel();
+
+    return reservationMapper.toDeleteResponse(reservation);
   }
 
   public ResponseReservationList getMyReservations() {
@@ -165,7 +158,7 @@ public class ReservationService {
     List<Reservation> reservationList = reservationRepository.findByUsername(username);
     ResponseReservationList dto = new ResponseReservationList(new ArrayList<>());
     for (Reservation r : reservationList) {
-      dto.getItems().add(new item(r.getId(), r.getEvent().getId(), r.getStatus().getStatus()));
+      dto.getItems().add(new item(r.getId(), r.getEvent().getId(), r.getStatus().name()));
     }
     return dto;
   }

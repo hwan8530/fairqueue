@@ -1,16 +1,19 @@
 package com.example.eventplatform.job.service;
 
+import com.example.eventplatform.database.JobRedisKey;
 import com.example.eventplatform.database.RedisHandler;
-import com.example.eventplatform.event.entity.Event;
-import com.example.eventplatform.event.service.EventService;
+import com.example.eventplatform.event.entity.EventType;
 import com.example.eventplatform.exception.GlobalCustomException;
 import com.example.eventplatform.exception.GlobalExceptions;
 import com.example.eventplatform.job.entity.Job;
+import com.example.eventplatform.job.entity.JobStatus;
 import com.example.eventplatform.job.entity.JobType;
 import com.example.eventplatform.job.repository.JobRepository;
-import com.example.eventplatform.messagebroker.KafkaProducer;
 import com.example.eventplatform.reservation.entity.Reservation;
+import com.example.eventplatform.reservation.entity.ReservationStatus;
+import com.example.eventplatform.reservation.repository.ReservationRepository;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,8 +30,7 @@ public class JobService {
   private final JobRepository jobRepository;
   private final ObjectMapper objectMapper;
   private final RedisHandler redisHandler;
-  private final KafkaProducer producer;
-  private final EventService eventService;
+  private final ReservationRepository reservationRepository;
 
   @Transactional
   public void makeSchedule(String topic, Reservation reservation) {
@@ -38,27 +40,19 @@ public class JobService {
     Map<String, Object> payload = objectMapper.convertValue(reservation,
         new TypeReference<Map<String, Object>>() {
         });
-    Job job = Job.builder().type(JobType.fromStringtoJobType(topic.toUpperCase()))
+    Job job = Job.builder().type(JobType.valueOf(topic.toUpperCase()))
         .payload(payload).idempotency_key(
             reservation.getIdempotency_key()).build();
     jobRepository.save(job);
-    String key = "job:schedule:" + job.getId();
+    String key = JobRedisKey.SCHEDULE.generateKeyNoParam(job.getId());
     redisHandler.makeJobWithTtl(key, job.getNext_run_at());
-  }
-
-  // 반환타입은 아직 미정이라 void
-  @Transactional
-  public void confirmReservation(Reservation reservation) {
-    Job job = jobRepository.findByIdempotency_key(reservation.getIdempotency_key())
-        .orElseThrow(() -> new GlobalCustomException(
-            GlobalExceptions.INTERNAL_ERROR));
   }
 
   @Transactional
   public void enQueue(long jobId) {
     Job job = jobRepository.findById(jobId)
         .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
-    String key = "job:queue:" + job.getId();
+    String key = JobRedisKey.QUEUE.generateKeyNoParam(job.getId());
     redisHandler.makeJobWithTtl(key, job.enQueueJob());
   }
 
@@ -68,30 +62,46 @@ public class JobService {
     Job job = jobRepository.findById(jobId)
         .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
 
-    // 실행 -> 가장 아래에 위치한 Event 차감 처리 시도 -> 실패시 재시도
     job.start();
-    Long eventId = extractEventId(job.getPayload());
-    if (eventId == null) {
-      // eventId를 추출하지 못했다면 Fail 처리
-      job.fail("can't extract eventId from payload");
-      log.error("can't extract eventId from payload:{}", job.getPayload());
+    if (job.getStatus() == JobStatus.FAILED) {
+      // max_attempts 초과로 이미 FAILED 처리됨 - 더 이상 진행하지 않는다
+      return;
     }
-    if (eventService.decreaseRemainingStock(eventId) == 0) {
-      // 재고 부족 retry
-      String key = "job:queue:" + job.getId();
-      redisHandler.makeJobWithTtl(key, job.retry());
-    } else {
+
+    try {
+      dispatch(job);
       job.succeed();
+    } catch (Exception e) {
+      log.error("Job {} 처리 실패 (attempt {}): {}", job.getId(), job.getAttempts(),
+          e.getMessage());
+      String key = JobRedisKey.QUEUE.generateKeyNoParam(job.getId());
+      redisHandler.makeJobWithTtl(key, job.retry());
     }
   }
 
-  public Long extractEventId(Map<String, Object> payload) {
-    Object rawData = payload.get("event");
-    if (rawData != null) {
-      Event event = objectMapper.convertValue(rawData, Event.class);
-      return event.getId();
+  private void dispatch(Job job) {
+    if (job.getType() == JobType.CONFIRM_RESERVATION) {
+      confirmReservation(job);
+    } else {
+      throw new IllegalStateException("Unsupported job type: " + job.getType());
     }
-    return null;
+  }
+
+  private void confirmReservation(Job job) {
+    Reservation reservation = reservationRepository.findByIdempotencyKey(job.getIdempotency_key())
+        .orElseThrow(() -> new GlobalCustomException(GlobalExceptions.INTERNAL_ERROR));
+
+    if (reservation.getStatus() != ReservationStatus.PENDING) {
+      // 이미 CONFIRMED/CANCELLED/EXPIRED 등 종료 상태로 처리됨 -> 멱등 처리 (부수효과 없이 성공 처리)
+      return;
+    }
+    reservation.confirm(generateIssuedCode(reservation.getEvent().getType()));
+  }
+
+  private String generateIssuedCode(EventType type) {
+    String prefix = type == EventType.COUPON ? "CPN" : "TKT";
+    String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    return prefix + "-" + suffix;
   }
 
 }

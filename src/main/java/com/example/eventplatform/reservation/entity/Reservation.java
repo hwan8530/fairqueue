@@ -51,7 +51,7 @@ public class Reservation {
   private LocalDateTime expires_at;
   @NotNull
   private LocalDateTime created_at;
-  @NotNull
+  @Nullable
   private LocalDateTime confirmed_at;
 
   @Builder
@@ -59,7 +59,18 @@ public class Reservation {
     this.event = event;
     this.user = user;
     this.idempotency_key = idempotency_key;
+    this.status = ReservationStatus.PENDING;
     this.created_at = LocalDateTime.now();
     this.expires_at = this.created_at.plusMinutes(5);
+  }
+
+  public void confirm(String issuedCode) {
+    this.status = ReservationStatus.CONFIRMED;
+    this.issued_code = issuedCode;
+    this.confirmed_at = LocalDateTime.now();
+  }
+
+  public void cancel() {
+    this.status = ReservationStatus.CANCELLED;
   }
 }

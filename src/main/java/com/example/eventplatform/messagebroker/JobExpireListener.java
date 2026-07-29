@@ -1,5 +1,6 @@
 package com.example.eventplatform.messagebroker;
 
+import com.example.eventplatform.database.JobRedisKey;
 import com.example.eventplatform.job.service.JobService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,16 +21,11 @@ public class JobExpireListener implements MessageListener {
     String expiredKey = message.toString();
 
     log.info("Redis Job Expired 이벤트 수신: {}", expiredKey);
-    // key 별 동작 분기 처리
-    if (expiredKey.startsWith("job:schedule:")) {
-      // 키에서 Job ID만 추출합니다.
-      String jobIdStr = expiredKey.replace("job:schedule:", "");
-      Long jobId = Long.parseLong(jobIdStr);
-      jobService.enQueue(jobId);
-    } else if (expiredKey.startsWith("job:queued:")) {
-      String jobIdStr = expiredKey.replace("job:queued:", "");
-      Long jobId = Long.parseLong(jobIdStr);
-      jobService.start(jobId);
+    // key 별 동작 분기 처리 (접두사는 JobRedisKey 에서만 정의 - 문자열 리터럴로 직접 비교/파싱하지 않는다)
+    if (JobRedisKey.SCHEDULE.matches(expiredKey)) {
+      jobService.enQueue(JobRedisKey.SCHEDULE.extractJobId(expiredKey));
+    } else if (JobRedisKey.QUEUE.matches(expiredKey)) {
+      jobService.start(JobRedisKey.QUEUE.extractJobId(expiredKey));
     }
   }
 }

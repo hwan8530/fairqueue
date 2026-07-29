@@ -70,13 +70,16 @@ public class Job {
     LocalDateTime now = LocalDateTime.now();
     this.created_at = now;
     this.updated_at = now;
-    this.next_run_at = now.plusMinutes(3);
+    // CONFIRM_RESERVATION 은 스펙상 "즉시 처리" 대상. next_run_at 은 TTL 트리거용이라 완전한 0은
+    // 둘 수 없으므로 최소한의 지연만 둔다. next_run_at 자체를 지연시켜야 하는 Job(예: 향후 만료 회수)은
+    // 생성 시점에 실제 지연 시각을 넘겨받도록 별도 처리한다.
+    this.next_run_at = now.plusSeconds(1);
   }
 
   public LocalDateTime enQueueJob() {
     this.status = JobStatus.QUEUED;
     this.updated_at = LocalDateTime.now();
-    this.next_run_at = LocalDateTime.now().plusMinutes(2);
+    this.next_run_at = LocalDateTime.now().plusSeconds(1);
     return next_run_at;
   }
 
